@@ -31,7 +31,7 @@ Vous êtes en avance dans cette aventure sur la blockchain TON ! 🚀
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='MarkdownV2')
+    update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
 
 # Main function to set up the bot
 def main():
