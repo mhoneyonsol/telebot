@@ -25,11 +25,11 @@ Vous êtes en avance dans cette aventure sur la blockchain TON ! 🚀
 
     
     keyboard = [
-        [InlineKeyboardButton("🎨 Acheter des pixels", url='https://t.me/pxltonbot/buypixels')],
+        [InlineKeyboardButton("🎨 Pixel MAP", url='https://t.me/pxltonbot/buypixels')],
         [InlineKeyboardButton("⚔️ Battle Pixel Art", url='https://t.me/pxltonbot/artbattle')],
-        [InlineKeyboardButton("👤 Voir mon profil", callback_data='profile')],
-        [InlineKeyboardButton("🎁 Récompenses", callback_data='rewards')],
-        [InlineKeyboardButton("🏆 Classement", callback_data='leaderboard')],
+        [InlineKeyboardButton("👤 Profil", callback_data='profile')],
+        [InlineKeyboardButton("🎁 Rewards", callback_data='rewards')],
+        [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
