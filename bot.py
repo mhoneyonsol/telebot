@@ -33,6 +33,22 @@ Vous êtes en avance dans cette aventure sur la blockchain TON \\! 🚀
     # Send the welcome message with inline buttons
     await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='MarkdownV2')
 
+# Handler for the /buy_pixel command to open the mini-app
+async def buy_pixel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    web_app_url = "https://pixelwar-b032d9ebe14e.herokuapp.com/VEROK.html"
+    
+    # Create a button that opens the web app
+    web_app_button = InlineKeyboardButton(
+        text="Acheter des pixels",
+        web_app=WebAppInfo(url=web_app_url)
+    )
+    
+    # Create a keyboard with the button
+    keyboard = [[web_app_button]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Send the button to the user
+    await update.message.reply_text("Cliquez sur le bouton ci-dessous pour acheter des pixels:", reply_markup=reply_markup)
 
 # Fonction principale
 def main():
@@ -43,6 +59,7 @@ def main():
 
     # Commandes du bot
     application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('buy_pixel', buy_pixel))
 
     # Démarrer le bot
     application.run_polling()
