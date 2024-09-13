@@ -22,11 +22,11 @@ Vous êtes en avance dans cette aventure sur la blockchain TON ! 🚀
 👇 *Sélectionnez un jeu ci-dessous pour démarrer et commencer à gagner* :
     """
 
-    
+
     
     keyboard = [
-        [InlineKeyboardButton("🎨 Acheter des pixels", url='https://pixelwar-b032d9ebe14e.herokuapp.com/VEROK.html')],
-        [InlineKeyboardButton("⚔️ Battle Pixel Art", url='https://t.me/pxltonbot/buypixels')],
+        [InlineKeyboardButton("🎨 Acheter des pixels", url='https://t.me/pxltonbot/buypixels')],
+        [InlineKeyboardButton("⚔️ Battle Pixel Art", url='https://t.me/pxltonbot/artbattle')],
         [InlineKeyboardButton("👤 Voir mon profil", callback_data='profile')],
         [InlineKeyboardButton("🎁 Récompenses", callback_data='rewards')],
         [InlineKeyboardButton("🏆 Classement", callback_data='leaderboard')],
