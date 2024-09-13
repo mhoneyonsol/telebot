@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     welcome_message = """
 🎉 *Bienvenue dans PixelWar* 🎉
-Vous êtes en avance dans cette aventure sur la blockchain TON \\! 🚀
+Vous êtes en avance dans cette aventure sur la blockchain TON \\. 🚀
 
 💰 *Commencez à acheter et vendre des pixels* et participez à des batailles de pixel art pour gagner des TON\\.
 
@@ -32,7 +32,6 @@ Vous êtes en avance dans cette aventure sur la blockchain TON \\! 🚀
     
     # Send the welcome message with inline buttons
     await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='MarkdownV2')
-
 
 # Handler for the /buy_pixel command to open the mini-app
 async def buy_pixel(update: Update, context: ContextTypes.DEFAULT_TYPE):
