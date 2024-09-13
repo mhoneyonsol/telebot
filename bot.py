@@ -23,7 +23,7 @@ Vous êtes en avance dans cette aventure sur la blockchain TON ! 🚀
     """
     
     keyboard = [
-        [InlineKeyboardButton("🎨 Acheter des pixels", callback_data='buy_pixel')],
+        [InlineKeyboardButton("🎨 Acheter des pixels", url='https://pixelwar-b032d9ebe14e.herokuapp.com/VEROK.html')],
         [InlineKeyboardButton("⚔️ Battle Pixel Art", callback_data='pixel_battle')],
         [InlineKeyboardButton("👤 Voir mon profil", callback_data='profile')],
         [InlineKeyboardButton("🎁 Récompenses", callback_data='rewards')],
