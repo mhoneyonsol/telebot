@@ -17,7 +17,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🎉 *Bienvenue dans PixelWar* 🎉
 Vous êtes en avance dans cette aventure sur la blockchain TON \\! 🚀
 
-💰 *Commencez à acheter et vendre des pixels* et participez à des batailles de pixel art pour gagner des TON.
+💰 *Commencez à acheter et vendre des pixels* et participez à des batailles de pixel art pour gagner des TON\\.
 
 👇 *Sélectionnez un jeu ci\\-dessous pour démarrer et commencer à gagner* :
     """
@@ -32,6 +32,7 @@ Vous êtes en avance dans cette aventure sur la blockchain TON \\! 🚀
     
     # Send the welcome message with inline buttons
     await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='MarkdownV2')
+
 
 # Handler for the /buy_pixel command to open the mini-app
 async def buy_pixel(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -48,7 +49,7 @@ async def buy_pixel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     # Send the button to the user
-    await update.message.reply_text("Cliquez sur le bouton ci-dessous pour acheter des pixels:", reply_markup=reply_markup)
+    await update.message.reply_text("Cliquez sur le bouton ci\\-dessous pour acheter des pixels:", reply_markup=reply_markup)
 
 # Fonction principale
 def main():
