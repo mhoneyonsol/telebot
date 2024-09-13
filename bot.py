@@ -1,8 +1,8 @@
 import logging
-from telegram import Update, WebAppInfo, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 
-API_TOKEN = '7413088498:AAHIHrC2jO4DGy0FFa7pX9tNJ8KS-ED89II'
+API_TOKEN = '7413088498:AAHIHrC2jO4DGy0FFa7pX9tNJ8KS-ED89II'  # Your actual Bot API token
 
 # Setup logging to debug issues
 logging.basicConfig(
@@ -11,8 +11,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Handler pour la commande /start
+# Handler for the /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Escape special characters in MarkdownV2 (like '.' and '!')
     welcome_message = """
 🎉 *Bienvenue dans PixelWar* 🎉
 Vous êtes en avance dans cette aventure sur la blockchain TON \\. 🚀
