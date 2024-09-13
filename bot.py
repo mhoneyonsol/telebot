@@ -1,6 +1,6 @@
 import logging
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Updater, CommandHandler, CallbackContext
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Updater, CommandHandler
 
 API_TOKEN = '7413088498:AAHIHrC2jO4DGy0FFa7pX9tNJ8KS-ED89II'
 
@@ -12,7 +12,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Handler for the /start command
-def start(update: Update, context: CallbackContext):
+def start(update, context):
     welcome_message = """
 🎉 *Bienvenue dans PixelWar* 🎉
 Vous êtes en avance dans cette aventure sur la blockchain TON ! 🚀
@@ -21,6 +21,7 @@ Vous êtes en avance dans cette aventure sur la blockchain TON ! 🚀
 
 👇 *Sélectionnez un jeu ci-dessous pour démarrer et commencer à gagner* :
     """
+    
     keyboard = [
         [InlineKeyboardButton("🎨 Acheter des pixels", callback_data='buy_pixel')],
         [InlineKeyboardButton("⚔️ Battle Pixel Art", callback_data='pixel_battle')],
