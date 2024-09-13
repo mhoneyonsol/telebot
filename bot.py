@@ -14,13 +14,14 @@ logger = logging.getLogger(__name__)
 # Handler for the /start command
 def start(update, context):
     welcome_message = """
-🎉 *Bienvenue dans PixelWar* 🎉
-Vous êtes en avance dans cette aventure sur la blockchain TON ! 🚀
+🎉 *Welcome to PixelWar!* 🎉
+You're embarking on an exciting adventure on the TON blockchain! 🚀
 
-💰 *Commencez à acheter et vendre des pixels* et participez à des batailles de pixel art pour gagner des TON.
+💰 *Start buying and selling pixels* and join pixel art battles to win TON.
 
-👇 *Sélectionnez un jeu ci-dessous pour démarrer et commencer à gagner* :
+👇 *Select an option below to get started and begin winning*:
     """
+
 
 
     
