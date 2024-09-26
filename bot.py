@@ -23,6 +23,7 @@ You're embarking on an exciting adventure on the TON blockchain! 🚀
     """
 
     keyboard = [
+        [InlineKeyboardButton("💎 Launcher", url='https://t.me/pxltonbot/home')],
         [InlineKeyboardButton("🎨 Pixel MAP", url='https://t.me/pxltonbot/buypixels')],
         [InlineKeyboardButton("⚔️ Battle Pixel Art", url='https://t.me/pxltonbot/artbattle')],
         [InlineKeyboardButton("👩‍🌾 Farming", url='https://t.me/pxltonbot/farming')],
