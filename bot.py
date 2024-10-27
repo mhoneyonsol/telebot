@@ -24,11 +24,8 @@ You're embarking on an exciting adventure on the TON blockchain! 🚀
 
     keyboard = [
         [InlineKeyboardButton("💎 Launcher", url='https://t.me/pxltonbot/home')],
-        [InlineKeyboardButton("🎨 Pixel MAP", url='https://t.me/pxltonbot/buypixels')],
-        [InlineKeyboardButton("⚔️ Battle Pixel Art", url='https://t.me/pxltonbot/artbattle')],
-        [InlineKeyboardButton("👩‍🌾 Farming", url='https://t.me/pxltonbot/farming')],
         [InlineKeyboardButton("👤 Profil", callback_data='profile')],
-        [InlineKeyboardButton("🎁 Rewards", callback_data='rewards')],
+        [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
         [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
         [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/pxltonbot')],
     ]
