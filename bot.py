@@ -84,7 +84,7 @@ async def send_update_to_all_users():
     update_message = "🔔 *Update Alert!* We've made some changes to improve your experience. Our bot will now send you real-time update 😎💙"
 
     # URL to the WEBP image you want to send
-    photo_url = 'https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNms1YnR2ZDAyY2VzbzhqYm45NHloam5nNHVseHBlM284Zzd3dGZ0aCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Lopx9eUi34rbq/giphy.gif'
+    gif_url = 'https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNms1YnR2ZDAyY2VzbzhqYm45NHloam5nNHVseHBlM284Zzd3dGZ0aCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Lopx9eUi34rbq/giphy.gif'
 
     for doc in docs:
         user_data = doc.to_dict()
