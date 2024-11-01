@@ -51,11 +51,19 @@ async def start(update, context: ContextTypes.DEFAULT_TYPE):
         user_doc_ref.set({"chat_id": update.effective_chat.id})
 
     welcome_message = f"""
-🚀 *Welcome, {username}! Step into Pixel WAR*, where the excitement of gaming meets the power of the TON blockchain.
-💸 *Earn Real Rewards*: From daily prizes to seasonal events, there’s always a new way to boost your earnings and dominate the leaderboard.
-🎮 *Endless Fun & Updates*: Dive into a wide range of games with frequent updates to keep the experience fresh and thrilling!
-🔗 *Seamless Wallet Integration*: Connect your TON wallet to track your rewards, manage assets, and unlock real token rewards along with exclusive airdrops.
-**Ready to join the battle for pixels?** Start farming, trading, and earning on TON today with Pixel WAR!
+🚀 *Welcome, {username} ! 
+ 
+Step into Pixel WAR*, where the excitement of gaming meets the power of the TON blockchain. 
+
+💸 *Earn Real Rewards*: From daily rewards to seasonal events, there’s always a new way to boost your PXL wallet and dominate the leaderboard. 
+
+🎮 *Endless Fun & Updates*: Dive into a wide range of games with frequent updates to keep the experience fresh and thrilling! 
+
+🔗 *Seamless Wallet Integration*: Connect your TON wallet to track your rewards, manage assets, and unlock real token rewards along with exclusive airdrops. 
+
+In the meantime, don’t forget to invite  friends - it’s more fun together, and you’ll also get a small bonus for bringing them in. 
+
+**Ready to join the battle for pixels?** Start farming, trading, and earning on TON today with Pixel WAR! 
     """
     keyboard = [
         [InlineKeyboardButton("💎 Launcher", url='https://t.me/pxltonbot/home')],
