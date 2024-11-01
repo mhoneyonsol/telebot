@@ -13,13 +13,20 @@ logger = logging.getLogger(__name__)
 
 # Handler for the /start command
 def start(update, context):
-    welcome_message = """
-🎉 *Welcome to PixelWar!* 🎉
-You're embarking on an exciting adventure on the TON blockchain! 🚀
+    # Get the user's username or fallback to first name if unavailable
+    username = update.effective_user.username or update.effective_user.first_name or "Player"
+    
+    # Insert the username in the welcome message
+    welcome_message = f"""
+🚀 *Welcome, {username}! Step into Pixel WAR*, where the excitement of gaming meets the power of the TON blockchain. Claim, trade, and game to grow your PXL balance, all while exploring a constantly evolving world.
 
-💰 *Start buying and selling pixels* and join pixel art battles to win TON.
+💸 *Earn Real Rewards*: From daily prizes to seasonal events, there’s always a new way to boost your earnings and dominate the leaderboard.
 
-👇 *Select an option below to get started and begin winning*:
+🎮 *Endless Fun & Updates*: Dive into a wide range of games with frequent updates to keep the experience fresh and thrilling!
+
+🔗 *Seamless Wallet Integration*: Connect your TON wallet to track your rewards, manage assets, and unlock real token rewards along with exclusive airdrops.
+
+**Ready to join the battle for pixels?** Start farming, trading, and earning on TON today with Pixel WAR!
     """
 
     keyboard = [
