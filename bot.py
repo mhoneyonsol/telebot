@@ -73,17 +73,23 @@ async def send_update_to_all_users():
     users_ref = db.collection('users')
     docs = users_ref.stream()
 
-    update_message = "🔔 *Update Alert!* We've made some changes to improve your experience. Check out the latest version of Pixel WAR!"
+    update_message = "🔔 TEST2 *Update Alert!* We've made some changes to improve your experience. Check out the latest version of Pixel WAR!"
+
+    # URL to the WEBP image you want to send
+    photo_url = 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExdGFxbHk2ZmZ6NjI4aW94Zm0zaXZkdW0xdmF6dnJ3ZGNnODB3aWpvbCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/VRKheDy4DkBMrQm66p/giphy.webp'
 
     for doc in docs:
         user_data = doc.to_dict()
         chat_id = user_data.get("chat_id")
         if chat_id:
             try:
-                await bot.send_message(chat_id=chat_id, text=update_message, parse_mode='Markdown')
+                # Send the photo from the URL with the message
+                await bot.send_photo(chat_id=chat_id, photo=photo_url, caption=update_message, parse_mode='Markdown')
                 logger.info(f"Message sent to chat_id {chat_id}")
             except Exception as e:
                 logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
+
+
 
 # Command to broadcast message to all users, restricted to admin
 async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
