@@ -1,8 +1,16 @@
 import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import Updater, CommandHandler
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 API_TOKEN = '7413088498:AAHIHrC2jO4DGy0FFa7pX9tNJ8KS-ED89II'
+ADMIN_USERNAME = 'kspr444'  # Replace with your Telegram username for broadcast permissions
+
+# Firebase setup
+cred = credentials.Certificate("serviceAccountKey.json")  # Path to your Firebase service account key JSON file
+firebase_admin.initialize_app(cred)
+db = firestore.client()
 
 # Setup logging to debug issues
 logging.basicConfig(
@@ -16,6 +24,18 @@ def start(update, context):
     # Get the user's username or fallback to first name if unavailable
     username = update.effective_user.username or update.effective_user.first_name or "Player"
     
+    # Use the username as the document ID in Firestore
+    user_doc_ref = db.collection('users').document(username)  # Document ID is set to Telegram username
+    
+    # Check if the user document already exists
+    user_doc = user_doc_ref.get()
+    if user_doc.exists:
+        # If the document exists, update only the chat_id field
+        user_doc_ref.update({"chat_id": update.effective_chat.id})
+    else:
+        # If the document does not exist, create it with only the chat_id field
+        user_doc_ref.set({"chat_id": update.effective_chat.id})
+
     # Insert the username in the welcome message
     welcome_message = f"""
 🚀 *Welcome, {username}! Step into Pixel WAR*, where the excitement of gaming meets the power of the TON blockchain. Claim, trade, and game to grow your PXL balance, all while exploring a constantly evolving world.
@@ -40,6 +60,31 @@ def start(update, context):
 
     update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
 
+# Function to send a message to all users
+def send_update_to_all_users():
+    bot = Bot(token=API_TOKEN)
+    users_ref = db.collection('users')
+    docs = users_ref.stream()
+
+    update_message = "🔔 *Update Alert!* We've made some changes to improve your experience. Check out the latest version of Pixel WAR!"
+
+    for doc in docs:
+        user_data = doc.to_dict()
+        chat_id = user_data.get("chat_id")  # Retrieve the chat_id for each user
+        if chat_id:
+            try:
+                bot.send_message(chat_id=chat_id, text=update_message, parse_mode='Markdown')
+            except Exception as e:
+                logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
+
+# Command to broadcast message to all users, restricted to admin
+def broadcast(update, context):
+    if update.effective_user.username == ADMIN_USERNAME:  # Check if user is admin
+        send_update_to_all_users()
+        update.message.reply_text("Update sent to all users.")
+    else:
+        update.message.reply_text("You don't have permission to use this command.")
+
 # Main function to set up the bot
 def main():
     # Create an Updater object with the bot token
@@ -47,6 +92,9 @@ def main():
 
     # Add a handler for the /start command
     updater.dispatcher.add_handler(CommandHandler('start', start))
+
+    # Add a handler for the /broadcast command (admin only)
+    updater.dispatcher.add_handler(CommandHandler('broadcast', broadcast))
 
     # Start polling for updates from Telegram
     updater.start_polling()
