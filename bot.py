@@ -1,7 +1,6 @@
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot
 from telegram.ext import Updater, CommandHandler
-import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 
