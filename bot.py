@@ -5,14 +5,14 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 
 API_TOKEN = '7413088498:AAHIHrC2jO4DGy0FFa7pX9tNJ8KS-ED89II'
-ADMIN_USERNAME = 'kspr444'  # Your Telegram username for broadcast permissions
+ADMIN_USERNAME = 'kspr444'  # Replace with your Telegram username for broadcast permissions
 
 # Firebase setup
-cred = credentials.Certificate("serviceAccountKey.json")  # Path to Firebase service account key JSON
+cred = credentials.Certificate("serviceAccountKey.json")  # Path to your Firebase service account key JSON file
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# Set up logging
+# Setup logging to debug issues
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -25,25 +25,30 @@ def start(update, context):
     username = update.effective_user.username or update.effective_user.first_name or "Player"
     
     # Use the username as the document ID in Firestore
-    user_doc_ref = db.collection('users').document(username)
+    user_doc_ref = db.collection('users').document(username)  # Document ID is set to Telegram username
     
     # Check if the user document already exists
     user_doc = user_doc_ref.get()
     if user_doc.exists:
-        # If document exists, update only the chat_id field
+        # If the document exists, update only the chat_id field
         user_doc_ref.update({"chat_id": update.effective_chat.id})
     else:
-        # If document does not exist, create it with only the chat_id field
+        # If the document does not exist, create it with only the chat_id field
         user_doc_ref.set({"chat_id": update.effective_chat.id})
 
-    # Welcome message with interactive buttons
+    # Insert the username in the welcome message
     welcome_message = f"""
-🚀 *Welcome, {username}! Step into Pixel WAR*, where the excitement of gaming meets the power of the TON blockchain.
+🚀 *Welcome, {username}! Step into Pixel WAR*, where the excitement of gaming meets the power of the TON blockchain. Claim, trade, and game to grow your PXL balance, all while exploring a constantly evolving world.
+
 💸 *Earn Real Rewards*: From daily prizes to seasonal events, there’s always a new way to boost your earnings and dominate the leaderboard.
+
 🎮 *Endless Fun & Updates*: Dive into a wide range of games with frequent updates to keep the experience fresh and thrilling!
+
 🔗 *Seamless Wallet Integration*: Connect your TON wallet to track your rewards, manage assets, and unlock real token rewards along with exclusive airdrops.
+
 **Ready to join the battle for pixels?** Start farming, trading, and earning on TON today with Pixel WAR!
     """
+
     keyboard = [
         [InlineKeyboardButton("💎 Launcher", url='https://t.me/pxltonbot/home')],
         [InlineKeyboardButton("👤 Profil", callback_data='profile')],
@@ -52,6 +57,7 @@ def start(update, context):
         [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/pxltonbot')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
+
     update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
 
 # Function to send a message to all users
@@ -64,11 +70,10 @@ def send_update_to_all_users():
 
     for doc in docs:
         user_data = doc.to_dict()
-        chat_id = user_data.get("chat_id")
+        chat_id = user_data.get("chat_id")  # Retrieve the chat_id for each user
         if chat_id:
             try:
                 bot.send_message(chat_id=chat_id, text=update_message, parse_mode='Markdown')
-                logger.info(f"Message sent to chat_id {chat_id}")
             except Exception as e:
                 logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
 
@@ -82,14 +87,19 @@ def broadcast(update, context):
 
 # Main function to set up the bot
 def main():
+    # Create an Updater object with the bot token
     updater = Updater(token=API_TOKEN, use_context=True)
 
-    # Add command handlers
+    # Add a handler for the /start command
     updater.dispatcher.add_handler(CommandHandler('start', start))
+
+    # Add a handler for the /broadcast command (admin only)
     updater.dispatcher.add_handler(CommandHandler('broadcast', broadcast))
 
     # Start polling for updates from Telegram
     updater.start_polling()
+
+    # Block until you press Ctrl+C or the process is terminated
     updater.idle()
 
 if __name__ == '__main__':
