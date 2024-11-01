@@ -24,8 +24,7 @@ firebase_config = {
 }
 
 # Initialize Firebase with the environment-configured credentials
-import json
-cred = credentials.Certificate(json.loads(json.dumps(firebase_config)))
+cred = credentials.Certificate(firebase_config)
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
