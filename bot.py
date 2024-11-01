@@ -63,7 +63,7 @@ Step into Pixel WAR*, where the excitement of gaming meets the power of the TON 
 
 In the meantime, don’t forget to invite  friends - it’s more fun together, and you’ll also get a small bonus for bringing them in. 
 
-**Ready to join the battle for pixels?** Start farming, trading, and earning on TON today with Pixel WAR! 
+**Ready to join the battle for PXL?** Start farming, trading, and earning on TON today with Pixel WAR! 
     """
     keyboard = [
         [InlineKeyboardButton("💎 Launcher", url='https://t.me/pxltonbot/home')],
@@ -81,10 +81,10 @@ async def send_update_to_all_users():
     users_ref = db.collection('users')
     docs = users_ref.stream()
 
-    update_message = "🔔 TEST2 *Update Alert!* We've made some changes to improve your experience. Check out the latest version of Pixel WAR!"
+    update_message = "🔔 *Update Alert!* We've made some changes to improve your experience. Our bot will now send you real-time update 😎💙"
 
     # URL to the WEBP image you want to send
-    photo_url = 'https://media4.giphy.com/media/v1.Y2lkPTc5MGI3NjExdGFxbHk2ZmZ6NjI4aW94Zm0zaXZkdW0xdmF6dnJ3ZGNnODB3aWpvbCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/VRKheDy4DkBMrQm66p/giphy.webp'
+    photo_url = 'https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNms1YnR2ZDAyY2VzbzhqYm45NHloam5nNHVseHBlM284Zzd3dGZ0aCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Lopx9eUi34rbq/giphy.gif'
 
     for doc in docs:
         user_data = doc.to_dict()
@@ -92,7 +92,7 @@ async def send_update_to_all_users():
         if chat_id:
             try:
                 # Send the photo from the URL with the message
-                await bot.send_photo(chat_id=chat_id, photo=photo_url, caption=update_message, parse_mode='Markdown')
+                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown')
                 logger.info(f"Message sent to chat_id {chat_id}")
             except Exception as e:
                 logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
