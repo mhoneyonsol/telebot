@@ -81,10 +81,10 @@ async def send_update_to_all_users():
     users_ref = db.collection('users')
     docs = users_ref.stream()
 
-    update_message = "🔔 *Update Alert!* We've made some changes to improve your experience. Our bot will now send you real-time update 😎💙"
+    update_message = "🔔 *Update Alert!* We've made some changes to improve your experience. There's a new game live on our dApp 😎💙"
 
     # URL to the WEBP image you want to send
-    gif_url = 'https://i.giphy.com/media/v1.Y2lkPTc5MGI3NjExNms1YnR2ZDAyY2VzbzhqYm45NHloam5nNHVseHBlM284Zzd3dGZ0aCZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/Lopx9eUi34rbq/giphy.gif'
+    gif_url = 'https://i.imgur.com/8FHgT41.gif'
 
     for doc in docs:
         user_data = doc.to_dict()
