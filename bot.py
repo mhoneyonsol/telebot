@@ -67,7 +67,7 @@ In the meantime, don’t forget to invite  friends - it’s more fun together, a
     """
     keyboard = [
         [InlineKeyboardButton("💎 Launcher", url='https://t.me/pxltonbot/home')],
-        [InlineKeyboardButton("👤 Profil", callback_data='profile')],
+        [InlineKeyboardButton("👤 Channel", url='https://t.me/pxlonton')],
         [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
         [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
         [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/pxltonbot')],
