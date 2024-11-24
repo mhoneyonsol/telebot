@@ -53,9 +53,9 @@ async def start(update, context: ContextTypes.DEFAULT_TYPE):
     welcome_message = f"""
 🚀 *Welcome, {username} ! 
  
-Step into Pixel WAR*, where the excitement of gaming meets the power of the TON blockchain. 
+Step into Nestor LABS*, where the excitement of gaming meets the power of the TON blockchain. 
 
-💸 *Earn Real Rewards*: From daily rewards to seasonal events, there’s always a new way to boost your PXL wallet and dominate the leaderboard. 
+💸 *Earn Real Rewards*: From daily rewards to seasonal events, there’s always a new way to boost your NES wallet and dominate the leaderboard. 
 
 🎮 *Endless Fun & Updates*: Dive into a wide range of games with frequent updates to keep the experience fresh and thrilling! 
 
@@ -63,7 +63,7 @@ Step into Pixel WAR*, where the excitement of gaming meets the power of the TON 
 
 In the meantime, don’t forget to invite  friends - it’s more fun together, and you’ll also get a small bonus for bringing them in. 
 
-**Ready to join the battle for PXL?** Start farming, trading, and earning on TON today with Pixel WAR! 
+**Ready to join the battle for NES?** Start farming, trading, and earning on TON today with Nestor LABS! 
     """
     keyboard = [
         [InlineKeyboardButton("💎 Launcher", url='https://t.me/pxltonbot/home')],
@@ -81,10 +81,15 @@ async def send_update_to_all_users():
     users_ref = db.collection('users')
     docs = users_ref.stream()
 
-    update_message = "🔔 *Update Alert!* We've made some changes to improve your experience. There's a new game live on our dApp 😎💙"
+    update_message = "🔔 *Update Alert!* We've made some changes to improve your experience 😎"
 
     # URL to the WEBP image you want to send
-    gif_url = 'https://i.imgur.com/8FHgT41.gif'
+    gif_url = 'https://i.imgur.com/RPGtlZK.gif'
+
+     # Inline keyboard with a button to launch the app
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🚀 Launch App", url="https://t.me/pxltonbot/home")],
+    ])
 
     for doc in docs:
         user_data = doc.to_dict()
@@ -92,7 +97,7 @@ async def send_update_to_all_users():
         if chat_id:
             try:
                 # Send the photo from the URL with the message
-                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown')
+                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown',reply_markup=keyboard)
                 logger.info(f"Message sent to chat_id {chat_id}")
             except Exception as e:
                 logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
