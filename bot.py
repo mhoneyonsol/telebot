@@ -66,7 +66,7 @@ In the meantime, don’t forget to invite  friends - it’s more fun together, a
 **Ready to join the battle for NES?** Start farming, trading, and earning on TON today with Nestor LABS! 
     """
     keyboard = [
-        [InlineKeyboardButton("💎 Launcher", url='https://t.me/pxltonbot/home')],
+        [InlineKeyboardButton("💎 Launcher", url='https://t.me/nestortonbot/home')],
         [InlineKeyboardButton("👤 Channel", url='https://t.me/pxlonton')],
         [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
         [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
@@ -88,7 +88,7 @@ async def send_update_to_all_users():
 
      # Inline keyboard with a button to launch the app
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🚀 Launch App", url="https://t.me/pxltonbot/home")],
+        [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")],
     ])
 
     for doc in docs:
