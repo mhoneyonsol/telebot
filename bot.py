@@ -212,6 +212,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Convert timestamps to readable format
             last_claim = convert_timestamp_to_readable(last_claim_timestamp)
+            last_session = convert_timestamp_to_readable(last_session_time)
 
             # Convert time on app to hours and minutes
             if isinstance(time_on_app, int):
