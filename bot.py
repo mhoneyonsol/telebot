@@ -45,7 +45,7 @@ async def start(update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name or "Player"
     user_doc_ref = db.collection('users').document(username)
     user_doc = user_doc_ref.get()
-    if user_doc.exists():
+    if user_doc.exists:
         user_doc_ref.update({"chat_id": update.effective_chat.id})
     else:
         user_doc_ref.set({"chat_id": update.effective_chat.id})
@@ -75,45 +75,6 @@ In the meantime, don’t forget to invite  friends - it’s more fun together, a
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
 
-# Handler for the /leaderboard command
-async def leaderboard(update, context: ContextTypes.DEFAULT_TYPE):
-    username = update.effective_user.username or update.effective_user.first_name
-    user_rank = None
-    leaderboard_text = "🏆 *Leaderboard* 🏆\n\n"
-
-    try:
-        # Fetch all documents from the 'mainleaderboard' collection in order
-        leaderboard_ref = db.collection('mainleaderboard')
-        leaderboard_docs = leaderboard_ref.order_by('rank').stream()
-
-        # Build the leaderboard message
-        for doc in leaderboard_docs:
-            data = doc.to_dict()
-            rank = data.get("rank")
-            user = data.get("username")
-            balance = data.get("token_balance", 0)
-            level = data.get("level", 1)
-
-            # Check if the current user is in this rank
-            if user == username:
-                user_rank = rank
-
-            # Append this entry to the leaderboard text
-            leaderboard_text += f"#{rank} - {user} | 💰 {balance} NES | 🏅 Level {level}\n"
-
-        # Add user's rank to the message
-        if user_rank:
-            rank_text = f"Your rank is: #{user_rank}\n\n"
-        else:
-            rank_text = "Your rank is: Not Available\n\n"
-
-        # Send the message with the user's rank and the leaderboard
-        await update.message.reply_text(rank_text + leaderboard_text, parse_mode="Markdown")
-
-    except Exception as e:
-        logger.error(f"Error fetching leaderboard: {e}")
-        await update.message.reply_text("An error occurred while fetching the leaderboard. Please try again later.")
-
 # Function to send a message to all users
 async def send_update_to_all_users():
     bot = Bot(token=API_TOKEN)
@@ -136,10 +97,12 @@ async def send_update_to_all_users():
         if chat_id:
             try:
                 # Send the photo from the URL with the message
-                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown', reply_markup=keyboard)
+                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown',reply_markup=keyboard)
                 logger.info(f"Message sent to chat_id {chat_id}")
             except Exception as e:
                 logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
+
+
 
 # Command to broadcast message to all users, restricted to admin
 async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
@@ -156,7 +119,6 @@ def main():
     # Add command handlers
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('broadcast', broadcast))
-    application.add_handler(CommandHandler('leaderboard', leaderboard))  # Add this line for the leaderboard command
     
     # Start polling for updates from Telegram
     application.run_polling()
