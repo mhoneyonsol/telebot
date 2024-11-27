@@ -151,6 +151,7 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Add a button to launch the app
         keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏆 View Profile", callback_data='profile')],
             [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
         ])
 
@@ -250,7 +251,7 @@ Keep earning rewards and climbing the leaderboard! 🚀
                 await update.callback_query.answer()
                 await context.bot.send_animation(
                     chat_id=update.effective_chat.id,
-                    animation="https://i.imgur.com/ScFz9BY.gif",
+                    animation="https://i.imgur.com/NqniPEJ.gif",
                     caption=profile_message,
                     reply_markup=keyboard,
                     parse_mode='Markdown'
