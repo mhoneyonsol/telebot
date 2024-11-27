@@ -1,5 +1,5 @@
 import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from dotenv import load_dotenv
 import firebase_admin
@@ -41,29 +41,30 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Handler for the /start command
-async def start(update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name or "Player"
+    chat_id = update.effective_chat.id
+
+    # Save or update user data in Firestore
     user_doc_ref = db.collection('users').document(username)
     user_doc = user_doc_ref.get()
     if user_doc.exists:
-        user_doc_ref.update({"chat_id": update.effective_chat.id})
+        user_doc_ref.update({"chat_id": chat_id})
     else:
-        user_doc_ref.set({"chat_id": update.effective_chat.id})
+        user_doc_ref.set({"chat_id": chat_id})
 
     welcome_message = f"""
-🚀 *Welcome, {username} ! 
- 
-Step into Nestor LABS*, where the excitement of gaming meets the power of the TON blockchain. 
+🚀 *Welcome, {username}!*
 
-💸 *Earn Real Rewards*: From daily rewards to seasonal events, there’s always a new way to boost your NES wallet and dominate the leaderboard. 
+Step into *Nestor LABS*, where the excitement of gaming meets the power of the TON blockchain.
 
-🎮 *Endless Fun & Updates*: Dive into a wide range of games with frequent updates to keep the experience fresh and thrilling! 
+💸 *Earn Real Rewards*: From daily rewards to seasonal events, there’s always a new way to boost your NES wallet and dominate the leaderboard.
 
-🔗 *Seamless Wallet Integration*: Connect your TON wallet to track your rewards, manage assets, and unlock real token rewards along with exclusive airdrops. 
+🎮 *Endless Fun & Updates*: Dive into a wide range of games with frequent updates to keep the experience fresh and thrilling!
 
-In the meantime, don’t forget to invite  friends - it’s more fun together, and you’ll also get a small bonus for bringing them in. 
+🔗 *Seamless Wallet Integration*: Connect your TON wallet to track your rewards, manage assets, and unlock real token rewards along with exclusive airdrops.
 
-**Ready to join the battle for NES?** Start farming, trading, and earning on TON today with Nestor LABS! 
+Ready to join the battle for NES? Start farming, trading, and earning on TON today with Nestor LABS!
     """
     keyboard = [
         [InlineKeyboardButton("💎 Launcher", url='https://t.me/nestortonbot/home')],
@@ -75,7 +76,42 @@ In the meantime, don’t forget to invite  friends - it’s more fun together, a
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
 
-# Function to send a message to all users
+# Handler for the /leaderboard command
+async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    username = update.effective_user.username or update.effective_user.first_name
+    user_rank = None
+    leaderboard_text = "🏆 *Leaderboard* 🏆\n\n"
+
+    try:
+        # Fetch leaderboard data from Firestore
+        leaderboard_ref = db.collection('mainleaderboard')
+        leaderboard_docs = leaderboard_ref.order_by('rank').stream()
+
+        # Build the leaderboard message
+        for doc in leaderboard_docs:
+            data = doc.to_dict()
+            rank = data.get("rank")
+            user = data.get("username")
+            balance = data.get("token_balance", 0)
+            level = data.get("level", 1)
+
+            if user == username:
+                user_rank = rank
+
+            leaderboard_text += f"#{rank} - {user} | 💰 {balance} NES | 🏅 Level {level}\n"
+
+        # Add user's rank at the top
+        if user_rank:
+            rank_text = f"Your rank is: #{user_rank}\n\n"
+        else:
+            rank_text = "Your rank is: Not Available\n\n"
+
+        await update.message.reply_text(rank_text + leaderboard_text, parse_mode="Markdown")
+    except Exception as e:
+        logger.error(f"Error fetching leaderboard: {e}")
+        await update.message.reply_text("An error occurred while fetching the leaderboard. Please try again later.")
+
+# Command to broadcast a message to all users
 async def send_update_to_all_users():
     bot = Bot(token=API_TOKEN)
     users_ref = db.collection('users')
@@ -83,10 +119,8 @@ async def send_update_to_all_users():
 
     update_message = "🔔 *Update Alert!* We've made some changes to improve your experience 😎"
 
-    # URL to the WEBP image you want to send
     gif_url = 'https://i.imgur.com/RPGtlZK.gif'
 
-     # Inline keyboard with a button to launch the app
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")],
     ])
@@ -96,16 +130,13 @@ async def send_update_to_all_users():
         chat_id = user_data.get("chat_id")
         if chat_id:
             try:
-                # Send the photo from the URL with the message
-                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown',reply_markup=keyboard)
+                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown', reply_markup=keyboard)
                 logger.info(f"Message sent to chat_id {chat_id}")
             except Exception as e:
                 logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
 
-
-
-# Command to broadcast message to all users, restricted to admin
-async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
+# Handler for the /broadcast command
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username == ADMIN_USERNAME:
         await send_update_to_all_users()
         await update.message.reply_text("Update sent to all users.")
@@ -115,12 +146,13 @@ async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
 # Main function to set up the bot
 def main():
     application = ApplicationBuilder().token(API_TOKEN).build()
-    
+
     # Add command handlers
     application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('leaderboard', leaderboard))
     application.add_handler(CommandHandler('broadcast', broadcast))
-    
-    # Start polling for updates from Telegram
+
+    # Start polling for updates
     application.run_polling()
 
 if __name__ == '__main__':
