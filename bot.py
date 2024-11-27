@@ -50,17 +50,23 @@ def format_number(num):
     return str(num)  # For less than 1 thousand, return as-is
 
 
-# Function to convert a timestamp to a readable format
-def convert_timestamp_to_readable(timestamp):
+def convert_timestamp_to_custom_format(timestamp):
     try:
         if isinstance(timestamp, int):  # Assume it's in milliseconds
             timestamp_seconds = timestamp // 1000
-            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d %B %Y, %H:%M:%S UTC')
+            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d/%m/%y %H:%M:%S')
+        elif isinstance(timestamp, str):  # ISO string timestamp from Firestore
+            # Parse ISO format string and convert to desired format
+            parsed_date = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+            return parsed_date.strftime('%d/%m/%y %H:%M:%S')
+        elif hasattr(timestamp, 'to_date'):  # If it's a Firestore Timestamp object
+            return timestamp.to_date().strftime('%d/%m/%y %H:%M:%S')
         else:
             return "Not Available"
     except Exception as e:
-        logger.error(f"Error converting timestamp: {e}")
+        logger.error(f"Error converting timestamp: {timestamp}, error: {e}")
         return "Not Available"
+
 
 
 # Handler for the /start command
@@ -200,7 +206,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Extract relevant user information
             claimed_day = user_data.get('claimedDay', 'Not Available')
             last_claim_timestamp = user_data.get('lastClaimTimestamp', 'Not Available')
-            last_session_time = user_data.get('last_session_time', 'Not Available')
+            last_session_time = convert_timestamp_to_custom_format(last_session_time)
             level = user_data.get('level_notified', 'Not Available')
             time_on_app = user_data.get('time_on_app', 'Not Available')
             token_balance = user_data.get('token_balance', 0)
