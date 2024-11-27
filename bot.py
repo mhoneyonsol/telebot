@@ -76,7 +76,8 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
     """
     keyboard = [
         [InlineKeyboardButton("💎 Launcher", url='https://t.me/nestortonbot/home')],
-        [InlineKeyboardButton("👤 Channel", url='https://t.me/pxlonton')],
+        [InlineKeyboardButton("👤 Profile", callback_data='profile')],
+            [InlineKeyboardButton("👤 Channel", url='https://t.me/pxlonton')],
         [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
         [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
         [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/pxltonbot')],
@@ -84,7 +85,6 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
 
-# Handler for the /leaderboard command
 # Handler for the /leaderboard command
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
@@ -170,12 +170,89 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(error_message)
 
+# Handler for the /profile command
+async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    username = update.effective_user.username or update.effective_user.first_name
+    try:
+        # Fetch user data from Firestore
+        user_doc_ref = db.collection('users').document(username)
+        user_doc = user_doc_ref.get()
+
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            # Extract relevant user information
+            claimed_day = user_data.get('claimedday', 'Not Available')
+            last_claim = user_data.get('lastclaim', 'Not Available')
+            last_session = user_data.get('lastsession', 'Not Available')
+            level = user_data.get('level', 'Not Available')
+            time_on_app = user_data.get('timeonapp', 'Not Available')
+            token_balance = user_data.get('token_balance', 0)
+            ton_balance = user_data.get('tons_balance', 0)
+            wallet_address = user_data.get('wallet_address', 'Not Linked')
+
+            # Format the token and TON balances
+            formatted_token_balance = format_number(token_balance)
+            formatted_ton_balance = f"{ton_balance} TON"
+
+            # Build the profile message
+            profile_message = f"""
+👤 *Profile Information*
+
+📛 *Username*: `{username}`
+📅 *Claimed Days*: `{claimed_day}`
+🕒 *Last Claim*: `{last_claim}`
+📱 *Last Session*: `{last_session}`
+🎮 *Level*: `{level}`
+⏱️ *Time on App*: `{time_on_app}`
+💰 *Token Balance*: `{formatted_token_balance} NES`
+🔹 *TON Balance*: `{formatted_ton_balance}`
+💼 *Wallet Address*: `{wallet_address}`
+
+Keep earning rewards and climbing the leaderboard! 🚀
+            """
+
+            # Inline keyboard for additional actions
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏆 View Leaderboard", callback_data='leaderboard')],
+                [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
+            ])
+
+            # Respond with the profile information
+            if update.callback_query:
+                await update.callback_query.answer()
+                await update.callback_query.edit_message_text(
+                    profile_message, parse_mode='Markdown', reply_markup=keyboard
+                )
+            else:
+                await update.message.reply_text(
+                    profile_message, parse_mode='Markdown', reply_markup=keyboard
+                )
+
+        else:
+            # User document does not exist
+            error_message = "❌ No profile information found. Please start using the app to generate your profile!"
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_message)
+                await update.callback_query.answer()
+            else:
+                await update.message.reply_text(error_message)
+
+    except Exception as e:
+        logger.error(f"Error fetching profile for {username}: {e}")
+        error_message = "An error occurred while fetching your profile. Please try again later."
+        if update.callback_query:
+            await update.callback_query.edit_message_text(error_message)
+            await update.callback_query.answer()
+        else:
+            await update.message.reply_text(error_message)
 
 # Handler for the button callback
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query.data == 'leaderboard':
         await leaderboard(update, context)
+    elif query.data == 'profile':
+        await profile(update, context)
 
 # Main function to set up the bot
 def main():
@@ -184,6 +261,7 @@ def main():
     # Add command handlers
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('leaderboard', leaderboard))  # Add command handler for /leaderboard
+    application.add_handler(CommandHandler('profile', profile))  # Add command handler for /profile
     application.add_handler(CallbackQueryHandler(button_handler))  # Add callback query handler for buttons
 
     # Start polling for updates
