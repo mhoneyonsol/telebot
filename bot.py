@@ -244,7 +244,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📛 *Username*: `{username}`
 📅 *Claimed Days*: `{claimed_day}`
 🕒 *Last Claim*: `{last_claim}`
-📱 *Last Session*: `{last_session}`
+📱 *Last Session*: `{last_session_time}`
 🎮 *Level*: `{level}`
 ⏱️ *Time on App*: `{time_on_app_formatted}`
 💰 *Token Balance*: `{formatted_token_balance} NES`
