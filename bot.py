@@ -63,16 +63,18 @@ def convert_timestamp_to_readable(timestamp):
         logger.error(f"Error converting timestamp: {e}")
         return "Not Available"
 
-def convert_last_session_to_readable(timestamp):
+def convert_last_session_to_readable(last_session_time_str):
     try:
-        if isinstance(timestamp, int):  # Assume it's in milliseconds
-            timestamp_seconds = timestamp // 1000
-            # Format as `yyyy-mm-dd HH:MM`
-            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%Y-%m-%d %H:%M')
+        # Parse the specific string format
+        if isinstance(last_session_time_str, str):
+            # Adjust the format based on your input
+            dt = datetime.strptime(last_session_time_str, "%d %B %Y à %H:%M:%S %Z%z")
+            # Format it as `yyyy-mm-dd HH:MM`
+            return dt.strftime("%Y-%m-%d %H:%M")
         else:
             return "Not Available"
     except Exception as e:
-        logger.error(f"Error converting last session timestamp: {e}")
+        logger.error(f"Error parsing last session time: {e}")
         return "Not Available"
 
 
@@ -244,7 +246,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📛 *Username*: `{username}`
 📅 *Claimed Days*: `{claimed_day}`
 🕒 *Last Claim*: `{last_claim}`
-📱 *Last Session*: `{last_session}`
+📱 *Last Session*: `{last_session_time}`
 🎮 *Level*: `{level}`
 ⏱️ *Time on App*: `{time_on_app_formatted}`
 💰 *Token Balance*: `{formatted_token_balance} NES`
