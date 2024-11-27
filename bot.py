@@ -63,6 +63,17 @@ def convert_timestamp_to_readable(timestamp):
         logger.error(f"Error converting timestamp: {e}")
         return "Not Available"
 
+def convert_last_session_to_readable(timestamp):
+    try:
+        if isinstance(timestamp, int):  # Assume it's in milliseconds
+            timestamp_seconds = timestamp // 1000
+            # Format as `yyyy-mm-dd HH:MM`
+            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%Y-%m-%d %H:%M')
+        else:
+            return "Not Available"
+    except Exception as e:
+        logger.error(f"Error converting last session timestamp: {e}")
+        return "Not Available"
 
 
 # Handler for the /start command
@@ -212,6 +223,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Convert timestamps to readable format
             last_claim = convert_timestamp_to_readable(last_claim_timestamp)
+            last_session = convert_last_session_to_readable(last_session_time)
 
             # Convert time on app to hours and minutes
             if isinstance(time_on_app, int):
