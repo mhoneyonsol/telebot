@@ -182,6 +182,8 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # Handler for the /profile command
+from datetime import datetime
+
 # Handler for the /profile command
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
@@ -195,23 +197,18 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Extract relevant user information
             claimed_day = user_data.get('claimedDay', 'Not Available')
             last_claim_timestamp = user_data.get('lastClaimTimestamp', 'Not Available')
-            last_session_time = user_data.get('last_session_time', 'Not Available')
+            last_session_time = user_data.get('last_session_time', 'Not Available')  # Directly use it
             level = user_data.get('level_notified', 'Not Available')
             time_on_app = user_data.get('time_on_app', 'Not Available')
             token_balance = user_data.get('token_balance', 0)
             tons_balance = user_data.get('tons_balance', '0')
             wallet_address = user_data.get('wallet_address', 'Not Linked')
 
-            # Convert timestamps to readable format
+            # Convert lastClaimTimestamp to a readable format
             if isinstance(last_claim_timestamp, int):
-                last_claim = f"<t:{last_claim_timestamp}:F>"
+                last_claim = datetime.utcfromtimestamp(last_claim_timestamp).strftime('%d %B %Y, %H:%M UTC')
             else:
                 last_claim = "Not Available"
-
-            if isinstance(last_session_time, str):
-                last_session = last_session_time
-            else:
-                last_session = "Not Available"
 
             # Convert time on app to hours and minutes
             if isinstance(time_on_app, int):
@@ -232,7 +229,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📛 *Username*: `{username}`
 📅 *Claimed Days*: `{claimed_day}`
 🕒 *Last Claim*: `{last_claim}`
-📱 *Last Session*: `{last_session}`
+📱 *Last Session*: `{last_session_time}`
 🎮 *Level*: `{level}`
 ⏱️ *Time on App*: `{time_on_app_formatted}`
 💰 *Token Balance*: `{formatted_token_balance} NES`
