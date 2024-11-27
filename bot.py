@@ -111,10 +111,21 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if update.callback_query:
             # If triggered via callback query
-            await update.callback_query.edit_message_text(rank_text + leaderboard_text, parse_mode="Markdown")
             await update.callback_query.answer()
+            # Send the image and then edit the leaderboard message
+            await context.bot.send_animation(
+                chat_id=update.effective_chat.id,
+                animation="https://i.imgur.com/gdyscr0.gif"
+            )
+            await update.callback_query.edit_message_text(
+                rank_text + leaderboard_text, parse_mode="Markdown"
+            )
         else:
             # If triggered via the /leaderboard command
+            await context.bot.send_animation(
+                chat_id=update.effective_chat.id,
+                animation="https://i.imgur.com/gdyscr0.gif"
+            )
             await update.message.reply_text(rank_text + leaderboard_text, parse_mode="Markdown")
 
     except Exception as e:
@@ -125,6 +136,7 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.callback_query.answer()
         else:
             await update.message.reply_text(error_message)
+
 
 # Handler for the button callback
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
