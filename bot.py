@@ -40,6 +40,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Helper function to format numbers in compact form
+def format_number(num):
+    if num >= 1_000_000:  # For 1 million and above
+        return f"{num // 1_000_000}M"
+    elif num >= 1_000:  # For 1 thousand and above
+        return f"{num // 1_000}k"
+    return str(num)  # For less than 1 thousand, return as-is
+
 # Handler for the /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name or "Player"
@@ -81,6 +89,8 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
     user_rank = None
     leaderboard_text = "🏆 *Leaderboard* 🏆\n\n"
+    
+    header = "✨ *Top Players* ✨\n\n"
 
     try:
         # Fetch leaderboard data from Firestore, ordering by document ID
@@ -98,16 +108,27 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             balance = data.get("token_balance", 0)
             level = data.get("level", 1)
 
+            # Format the balance using the helper function
+            formatted_balance = format_number(balance)
+
+            # Highlight the user if they're viewing their rank
             if user == username:
                 user_rank = rank
-
-            leaderboard_text += f"#{rank} - {user} | 💰 {balance} NES | 🏅 Level {level}\n"
+                leaderboard_text += f"🌟 **#{rank} - {user}** | 💰 {formatted_balance} NES | 🏅 Level {level}\n"
+            elif rank == 1:
+                # Highlight the top rank
+                leaderboard_text += f"🥇 **#{rank} - {user}** | 💰 {formatted_balance} NES | 🏅 Level {level}\n"
+            else:
+                leaderboard_text += f"#{rank} - {user} | 💰 {formatted_balance} NES | 🏅 Level {level}\n"
 
         # Add user's rank at the top
         if user_rank:
-            rank_text = f"Your rank is: #{user_rank}\n\n"
+            rank_text = f"Your rank is: **#{user_rank}** 🎉\n\n"
         else:
-            rank_text = "Your rank is: Not Available\n\n"
+            rank_text = "Your rank is: Not Available 😢\n\n"
+
+        # Add a footer or call-to-action
+        footer = "\n🎮 *Keep playing to climb the leaderboard!*"
 
         if update.callback_query:
             # If triggered via callback query
@@ -118,7 +139,7 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 animation="https://i.imgur.com/gdyscr0.gif"
             )
             await update.callback_query.edit_message_text(
-                rank_text + leaderboard_text, parse_mode="Markdown"
+                header + rank_text + leaderboard_text + footer, parse_mode="Markdown"
             )
         else:
             # If triggered via the /leaderboard command
@@ -126,7 +147,9 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=update.effective_chat.id,
                 animation="https://i.imgur.com/gdyscr0.gif"
             )
-            await update.message.reply_text(rank_text + leaderboard_text, parse_mode="Markdown")
+            await update.message.reply_text(
+                header + rank_text + leaderboard_text + footer, parse_mode="Markdown"
+            )
 
     except Exception as e:
         logger.error(f"Error fetching leaderboard: {e}")
@@ -137,44 +160,11 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(error_message)
 
-
 # Handler for the button callback
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if query.data == 'leaderboard':
         await leaderboard(update, context)
-
-# Command to broadcast a message to all users
-async def send_update_to_all_users():
-    bot = Bot(token=API_TOKEN)
-    users_ref = db.collection('users')
-    docs = users_ref.stream()
-
-    update_message = "🔔 *Update Alert!* We've made some changes to improve your experience 😎"
-
-    gif_url = 'https://i.imgur.com/RPGtlZK.gif'
-
-    keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")],
-    ])
-
-    for doc in docs:
-        user_data = doc.to_dict()
-        chat_id = user_data.get("chat_id")
-        if chat_id:
-            try:
-                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown', reply_markup=keyboard)
-                logger.info(f"Message sent to chat_id {chat_id}")
-            except Exception as e:
-                logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
-
-# Handler for the /broadcast command
-async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username == ADMIN_USERNAME:
-        await send_update_to_all_users()
-        await update.message.reply_text("Update sent to all users.")
-    else:
-        await update.message.reply_text("You don't have permission to use this command.")
 
 # Main function to set up the bot
 def main():
@@ -184,7 +174,6 @@ def main():
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('leaderboard', leaderboard))  # Add command handler for /leaderboard
     application.add_handler(CallbackQueryHandler(button_handler))  # Add callback query handler for buttons
-    application.add_handler(CommandHandler('broadcast', broadcast))
 
     # Start polling for updates
     application.run_polling()
