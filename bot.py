@@ -239,7 +239,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🔹 *TON Balance*: `{formatted_ton_balance}`
 💼 *Wallet Address*: `{wallet_address}`
 
-Keep earning rewards and climbing the leaderboard! 🚀
+🌟 Every step counts – keep progressing !
             """
 
             # Inline keyboard for additional actions
