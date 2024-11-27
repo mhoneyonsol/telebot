@@ -3,7 +3,6 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 from dotenv import load_dotenv
 import firebase_admin
-from datetime import datetime
 from firebase_admin import credentials, firestore
 import os
 import json
@@ -189,25 +188,24 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_data = user_doc.to_dict()
             # Extract relevant user information
             claimed_day = user_data.get('claimedDay', 'Not Available')
-            last_claim = user_data.get('lastClaimTimestamp', 'Not Available')
-            last_session_time = user_data.get('last_session_time', 'Not Available')  # Firestore Timestamp
+            last_claim_timestamp = user_data.get('lastClaimTimestamp', 'Not Available')
+            last_session_time = user_data.get('last_session_time', 'Not Available')
             level = user_data.get('level_notified', 'Not Available')
             time_on_app = user_data.get('time_on_app', 'Not Available')
             token_balance = user_data.get('token_balance', 0)
             tons_balance = user_data.get('tons_balance', '0')
             wallet_address = user_data.get('wallet_address', 'Not Linked')
 
-            # Convert lastClaimTimestamp (if it's in UNIX format) to a readable date-time
-            if isinstance(last_claim, int):
-                last_claim = datetime.utcfromtimestamp(last_claim).strftime('%d %B %Y, %H:%M UTC')
+            # Convert timestamps to readable format
+            if isinstance(last_claim_timestamp, int):
+                last_claim = f"<t:{last_claim_timestamp}:F>"
             else:
                 last_claim = "Not Available"
 
-            # Convert Firestore Timestamp for last_session_time to a readable format
-            if isinstance(last_session_time, firebase_admin.firestore.Timestamp):
-                last_session_time = last_session_time.to_datetime().strftime('%d %B %Y, %H:%M UTC')
+            if isinstance(last_session_time, str):
+                last_session = last_session_time
             else:
-                last_session_time = "Not Available"
+                last_session = "Not Available"
 
             # Convert time on app to hours and minutes
             if isinstance(time_on_app, int):
@@ -228,7 +226,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📛 *Username*: `{username}`
 📅 *Claimed Days*: `{claimed_day}`
 🕒 *Last Claim*: `{last_claim}`
-📱 *Last Session*: `{last_session_time}`
+📱 *Last Session*: `{last_session}`
 🎮 *Level*: `{level}`
 ⏱️ *Time on App*: `{time_on_app_formatted}`
 💰 *Token Balance*: `{formatted_token_balance} NES`
@@ -275,8 +273,6 @@ Keep earning rewards and climbing the leaderboard! 🚀
 
 
 
-
-            
 
 # Handler for the button callback
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
