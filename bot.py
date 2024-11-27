@@ -245,17 +245,24 @@ Keep earning rewards and climbing the leaderboard! 🚀
                 [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
             ])
 
-            # Respond with the profile information
+            # Respond with the profile information including the GIF
             if update.callback_query:
                 await update.callback_query.answer()
-                await update.callback_query.edit_message_text(
-                    profile_message, parse_mode='Markdown', reply_markup=keyboard
+                await context.bot.send_animation(
+                    chat_id=update.effective_chat.id,
+                    animation="https://i.imgur.com/ScFz9BY.gif",
+                    caption=profile_message,
+                    reply_markup=keyboard,
+                    parse_mode='Markdown'
                 )
             else:
-                await update.message.reply_text(
-                    profile_message, parse_mode='Markdown', reply_markup=keyboard
+                await context.bot.send_animation(
+                    chat_id=update.effective_chat.id,
+                    animation="https://i.imgur.com/ScFz9BY.gif",
+                    caption=profile_message,
+                    reply_markup=keyboard,
+                    parse_mode='Markdown'
                 )
-
         else:
             # User document does not exist
             error_message = "❌ No profile information found. Please start using the app to generate your profile!"
@@ -274,14 +281,6 @@ Keep earning rewards and climbing the leaderboard! 🚀
         else:
             await update.message.reply_text(error_message)
 
-    except Exception as e:
-        logger.error(f"Error fetching profile for {username}: {e}")
-        error_message = "An error occurred while fetching your profile. Please try again later."
-        if update.callback_query:
-            await update.callback_query.edit_message_text(error_message)
-            await update.callback_query.answer()
-        else:
-            await update.message.reply_text(error_message)
 
 
 
