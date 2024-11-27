@@ -55,12 +55,14 @@ def convert_timestamp_to_readable(timestamp):
     try:
         if isinstance(timestamp, int):  # Assume it's in milliseconds
             timestamp_seconds = timestamp // 1000
-            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d %B %Y, %H:%M:%S UTC')
+            # Format as `dd-mm-yy, HH:MM`
+            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d-%m-%y, %H:%M')
         else:
             return "Not Available"
     except Exception as e:
         logger.error(f"Error converting timestamp: {e}")
         return "Not Available"
+
 
 
 # Handler for the /start command
