@@ -49,20 +49,21 @@ def format_number(num):
         return f"{num // 1_000}k"
     return str(num)  # For less than 1 thousand, return as-is
 
-
 def convert_timestamp_to_custom_format(timestamp):
     try:
-        if isinstance(timestamp, int):  # Assume it's in milliseconds
+        if isinstance(timestamp, int):  # If it's an integer, assume it's in milliseconds
             timestamp_seconds = timestamp // 1000
             return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d/%m/%y %H:%M:%S')
-        elif isinstance(timestamp, str):  # ISO string timestamp from Firestore
-            # Parse ISO format and convert to desired format
+        elif isinstance(timestamp, str):  # If it's a string, assume ISO 8601 format
+            # Parse ISO format string and convert to desired format
             parsed_date = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             return parsed_date.strftime('%d/%m/%y %H:%M:%S')
+        elif hasattr(timestamp, 'to_date'):  # If it's a Firestore Timestamp object
+            return timestamp.to_date().strftime('%d/%m/%y %H:%M:%S')
         else:
             return "Not Available"
     except Exception as e:
-        logger.error(f"Error converting timestamp: {e}")
+        logger.error(f"Error converting timestamp: {timestamp}, error: {e}")
         return "Not Available"
 
 
