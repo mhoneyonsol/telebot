@@ -284,6 +284,42 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(error_message)
 
+# Function to send a message to all users
+async def send_update_to_all_users():
+    bot = Bot(token=API_TOKEN)
+    users_ref = db.collection('users')
+    docs = users_ref.stream()
+
+    update_message = "🔔 *Update Alert!* We've made some changes you can now access profile info directly on bot 😎"
+
+    # URL to the WEBP image you want to send
+    gif_url = 'https://i.imgur.com/ScFz9BY.gif'
+
+     # Inline keyboard with a button to launch the app
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("View Profile", callback_data='profile')],
+    ])
+
+    for doc in docs:
+        user_data = doc.to_dict()
+        chat_id = user_data.get("chat_id")
+        if chat_id:
+            try:
+                # Send the photo from the URL with the message
+                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown',reply_markup=keyboard)
+                logger.info(f"Message sent to chat_id {chat_id}")
+            except Exception as e:
+                logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
+
+
+
+# Command to broadcast message to all users, restricted to admin
+async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.username == ADMIN_USERNAME:
+        await send_update_to_all_users()
+        await update.message.reply_text("Update sent to all users.")
+    else:
+        await update.message.reply_text("You don't have permission to use this command.")
 
 
 
@@ -302,6 +338,7 @@ def main():
 
     # Add command handlers
     application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('broadcast', broadcast))
     application.add_handler(CommandHandler('leaderboard', leaderboard))  # Add command handler for /leaderboard
     application.add_handler(CommandHandler('profile', profile))  # Add command handler for /profile
     application.add_handler(CallbackQueryHandler(button_handler))  # Add callback query handler for buttons
