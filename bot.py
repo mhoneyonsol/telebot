@@ -143,15 +143,11 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # If triggered via callback query
             await update.callback_query.answer()
 
-            # Send the animation first
+            # Send the animation and leaderboard text in the same new message
             await context.bot.send_animation(
                 chat_id=update.effective_chat.id,
-                animation="https://i.imgur.com/gdyscr0.gif"
-            )
-
-            # Then edit the existing message with leaderboard text
-            await update.callback_query.edit_message_text(
-                header + rank_text + leaderboard_text + footer,
+                animation="https://i.imgur.com/gdyscr0.gif",
+                caption=header + rank_text + leaderboard_text + footer,
                 reply_markup=keyboard,
                 parse_mode="Markdown"
             )
@@ -159,12 +155,8 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # If triggered via the /leaderboard command
             await context.bot.send_animation(
                 chat_id=update.effective_chat.id,
-                animation="https://i.imgur.com/gdyscr0.gif"
-            )
-
-            # Then send the leaderboard text
-            await update.message.reply_text(
-                header + rank_text + leaderboard_text + footer,
+                animation="https://i.imgur.com/gdyscr0.gif",
+                caption=header + rank_text + leaderboard_text + footer,
                 reply_markup=keyboard,
                 parse_mode="Markdown"
             )
@@ -177,8 +169,6 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.callback_query.answer()
         else:
             await update.message.reply_text(error_message)
-
-
 
 
 
