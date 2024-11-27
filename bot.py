@@ -1,6 +1,6 @@
 import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, CallbackContext
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
 from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -25,7 +25,7 @@ firebase_config = {
     "token_uri": os.getenv("FIREBASE_TOKEN_URI"),
     "auth_provider_x509_cert_url": os.getenv("FIREBASE_AUTH_PROVIDER_X509_CERT_URL"),
     "client_x509_cert_url": os.getenv("FIREBASE_CLIENT_X509_CERT_URL"),
-    "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN"),
+    "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN")
 }
 
 # Initialize Firebase with the loaded configuration
@@ -45,7 +45,7 @@ async def start(update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name or "Player"
     user_doc_ref = db.collection('users').document(username)
     user_doc = user_doc_ref.get()
-    if user_doc.exists():
+    if user_doc.exists:
         user_doc_ref.update({"chat_id": update.effective_chat.id})
     else:
         user_doc_ref.set({"chat_id": update.effective_chat.id})
@@ -61,7 +61,7 @@ Step into Nestor LABS*, where the excitement of gaming meets the power of the TO
 
 🔗 *Seamless Wallet Integration*: Connect your TON wallet to track your rewards, manage assets, and unlock real token rewards along with exclusive airdrops. 
 
-In the meantime, don’t forget to invite friends - it’s more fun together, and you’ll also get a small bonus for bringing them in. 
+In the meantime, don’t forget to invite  friends - it’s more fun together, and you’ll also get a small bonus for bringing them in. 
 
 **Ready to join the battle for NES?** Start farming, trading, and earning on TON today with Nestor LABS! 
     """
@@ -75,41 +75,40 @@ In the meantime, don’t forget to invite friends - it’s more fun together, an
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
 
-# Function to send the /start command to all users
-async def send_start_to_all_users():
+# Function to send a message to all users
+async def send_update_to_all_users():
+    bot = Bot(token=API_TOKEN)
     users_ref = db.collection('users')
     docs = users_ref.stream()
+
+    update_message = "🔔 *Update Alert!* We've made some changes to improve your experience 😎"
+
+    # URL to the WEBP image you want to send
+    gif_url = 'https://i.imgur.com/RPGtlZK.gif'
+
+     # Inline keyboard with a button to launch the app
+    keyboard = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")],
+    ])
 
     for doc in docs:
         user_data = doc.to_dict()
         chat_id = user_data.get("chat_id")
         if chat_id:
             try:
-                # Create a fake update object for each user
-                fake_update = Update(
-                    update_id=0,
-                    message=telegram.Message(
-                        message_id=0,
-                        date=None,  # Pass a valid date object if needed
-                        chat=telegram.Chat(id=chat_id, type="private"),
-                        text="/start",
-                    ),
-                )
-                # Create a fake context object
-                fake_context = CallbackContext(application=ApplicationBuilder().token(API_TOKEN).build())
-                
-                # Call the start handler
-                await start(fake_update, fake_context)
-                
-                logger.info(f"/start sent to chat_id {chat_id}")
+                # Send the photo from the URL with the message
+                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown',reply_markup=keyboard)
+                logger.info(f"Message sent to chat_id {chat_id}")
             except Exception as e:
-                logger.error(f"Failed to send /start to chat_id {chat_id}: {e}")
+                logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
 
-# Command to send /start to all users, restricted to admin
-async def broadcast_start(update, context: ContextTypes.DEFAULT_TYPE):
+
+
+# Command to broadcast message to all users, restricted to admin
+async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.username == ADMIN_USERNAME:
-        await send_start_to_all_users()
-        await update.message.reply_text("Start command sent to all users.")
+        await send_update_to_all_users()
+        await update.message.reply_text("Update sent to all users.")
     else:
         await update.message.reply_text("You don't have permission to use this command.")
 
@@ -119,7 +118,7 @@ def main():
     
     # Add command handlers
     application.add_handler(CommandHandler('start', start))
-    application.add_handler(CommandHandler('broadcast_start', broadcast_start))
+    application.add_handler(CommandHandler('broadcast', broadcast))
     
     # Start polling for updates from Telegram
     application.run_polling()
