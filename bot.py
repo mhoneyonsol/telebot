@@ -54,7 +54,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_doc_ref.set({"chat_id": chat_id})
 
     welcome_message = f"""
-🚀 *Welcome, {username}!*
+🚀 *Welcome, {username}!* 
 
 Step into *Nestor LABS*, where the excitement of gaming meets the power of the TON blockchain.
 
@@ -109,12 +109,22 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             rank_text = "Your rank is: Not Available\n\n"
 
-        await update.callback_query.edit_message_text(rank_text + leaderboard_text, parse_mode="Markdown")
-        await update.callback_query.answer()
+        if update.callback_query:
+            # If triggered via callback query
+            await update.callback_query.edit_message_text(rank_text + leaderboard_text, parse_mode="Markdown")
+            await update.callback_query.answer()
+        else:
+            # If triggered via the /leaderboard command
+            await update.message.reply_text(rank_text + leaderboard_text, parse_mode="Markdown")
+
     except Exception as e:
         logger.error(f"Error fetching leaderboard: {e}")
-        await update.callback_query.edit_message_text("An error occurred while fetching the leaderboard. Please try again later.")
-        await update.callback_query.answer()
+        error_message = "An error occurred while fetching the leaderboard. Please try again later."
+        if update.callback_query:
+            await update.callback_query.edit_message_text(error_message)
+            await update.callback_query.answer()
+        else:
+            await update.message.reply_text(error_message)
 
 # Handler for the button callback
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -160,6 +170,7 @@ def main():
 
     # Add command handlers
     application.add_handler(CommandHandler('start', start))
+    application.add_handler(CommandHandler('leaderboard', leaderboard))  # Add command handler for /leaderboard
     application.add_handler(CallbackQueryHandler(button_handler))  # Add callback query handler for buttons
     application.add_handler(CommandHandler('broadcast', broadcast))
 
