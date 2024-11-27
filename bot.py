@@ -85,6 +85,11 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
 
+
+
+
+
+
 # Handler for the /leaderboard command
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
@@ -170,6 +175,13 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(error_message)
 
+
+
+
+
+
+
+# Handler for the /profile command
 # Handler for the /profile command
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
@@ -181,18 +193,37 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user_doc.exists:
             user_data = user_doc.to_dict()
             # Extract relevant user information
-            claimed_day = user_data.get('claimedday', 'Not Available')
-            last_claim = user_data.get('lastclaim', 'Not Available')
-            last_session = user_data.get('lastsession', 'Not Available')
-            level = user_data.get('level', 'Not Available')
-            time_on_app = user_data.get('timeonapp', 'Not Available')
+            claimed_day = user_data.get('claimedDay', 'Not Available')
+            last_claim_timestamp = user_data.get('lastClaimTimestamp', 'Not Available')
+            last_session_time = user_data.get('last_session_time', 'Not Available')
+            level = user_data.get('level_notified', 'Not Available')
+            time_on_app = user_data.get('time_on_app', 'Not Available')
             token_balance = user_data.get('token_balance', 0)
-            ton_balance = user_data.get('tons_balance', 0)
+            tons_balance = user_data.get('tons_balance', '0')
             wallet_address = user_data.get('wallet_address', 'Not Linked')
+
+            # Convert timestamps to readable format
+            if isinstance(last_claim_timestamp, int):
+                last_claim = f"<t:{last_claim_timestamp}:F>"
+            else:
+                last_claim = "Not Available"
+
+            if isinstance(last_session_time, str):
+                last_session = last_session_time
+            else:
+                last_session = "Not Available"
+
+            # Convert time on app to hours and minutes
+            if isinstance(time_on_app, int):
+                hours = time_on_app // 3600
+                minutes = (time_on_app % 3600) // 60
+                time_on_app_formatted = f"{hours}h {minutes}m"
+            else:
+                time_on_app_formatted = "Not Available"
 
             # Format the token and TON balances
             formatted_token_balance = format_number(token_balance)
-            formatted_ton_balance = f"{ton_balance} TON"
+            formatted_ton_balance = f"{tons_balance} TON"
 
             # Build the profile message
             profile_message = f"""
@@ -203,7 +234,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🕒 *Last Claim*: `{last_claim}`
 📱 *Last Session*: `{last_session}`
 🎮 *Level*: `{level}`
-⏱️ *Time on App*: `{time_on_app}`
+⏱️ *Time on App*: `{time_on_app_formatted}`
 💰 *Token Balance*: `{formatted_token_balance} NES`
 🔹 *TON Balance*: `{formatted_ton_balance}`
 💼 *Wallet Address*: `{wallet_address}`
@@ -245,6 +276,7 @@ Keep earning rewards and climbing the leaderboard! 🚀
             await update.callback_query.answer()
         else:
             await update.message.reply_text(error_message)
+
 
 # Handler for the button callback
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
