@@ -92,9 +92,9 @@ Step into *Nestor LABS*, where the excitement of gaming meets the power of the T
 Ready to join the battle for NES? Start farming, trading, and earning on TON today with Nestor LABS!
     """
     keyboard = [
-        [InlineKeyboardButton("💎 Launcher", url='https://t.me/nestortonbot/home')],
-        [InlineKeyboardButton("👤 Profile", callback_data='profile')],
-            [InlineKeyboardButton("👤 Channel", url='https://t.me/pxlonton')],
+        [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/home')],
+        [InlineKeyboardButton("👾 Profile", callback_data='profile')],
+            [InlineKeyboardButton("🗯️ Channel", url='https://t.me/pxlonton')],
         [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
         [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
         [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/pxltonbot')],
