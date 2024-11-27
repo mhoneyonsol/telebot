@@ -50,6 +50,19 @@ def format_number(num):
     return str(num)  # For less than 1 thousand, return as-is
 
 
+# Function to convert a timestamp to a readable format
+def convert_timestamp_to_readable(timestamp):
+    try:
+        if isinstance(timestamp, int):  # Assume it's in milliseconds
+            timestamp_seconds = timestamp // 1000
+            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d %B %Y, %H:%M:%S UTC')
+        else:
+            return "Not Available"
+    except Exception as e:
+        logger.error(f"Error converting timestamp: {e}")
+        return "Not Available"
+
+
 # Handler for the /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name or "Player"
@@ -194,6 +207,9 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             token_balance = user_data.get('token_balance', 0)
             tons_balance = user_data.get('tons_balance', '0')
             wallet_address = user_data.get('wallet_address', 'Not Linked')
+
+            # Convert timestamps to readable format
+            last_claim_timestamp = convert_timestamp_to_readable(last_claim_timestamp)
 
             # Convert time on app to hours and minutes
             if isinstance(time_on_app, int):
