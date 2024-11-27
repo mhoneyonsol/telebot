@@ -142,11 +142,14 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.callback_query:
             # If triggered via callback query
             await update.callback_query.answer()
-            # Send the image and then edit the leaderboard message
+
+            # Send the animation first
             await context.bot.send_animation(
                 chat_id=update.effective_chat.id,
                 animation="https://i.imgur.com/gdyscr0.gif"
             )
+
+            # Then edit the existing message with leaderboard text
             await update.callback_query.edit_message_text(
                 header + rank_text + leaderboard_text + footer,
                 reply_markup=keyboard,
@@ -158,6 +161,8 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=update.effective_chat.id,
                 animation="https://i.imgur.com/gdyscr0.gif"
             )
+
+            # Then send the leaderboard text
             await update.message.reply_text(
                 header + rank_text + leaderboard_text + footer,
                 reply_markup=keyboard,
@@ -172,6 +177,7 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.callback_query.answer()
         else:
             await update.message.reply_text(error_message)
+
 
 
 
