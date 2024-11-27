@@ -259,7 +259,7 @@ Keep earning rewards and climbing the leaderboard! 🚀
             else:
                 await context.bot.send_animation(
                     chat_id=update.effective_chat.id,
-                    animation="https://i.imgur.com/ScFz9BY.gif",
+                    animation="https://i.imgur.com/NqniPEJ.gif",
                     caption=profile_message,
                     reply_markup=keyboard,
                     parse_mode='Markdown'
