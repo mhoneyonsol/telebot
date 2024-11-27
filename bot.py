@@ -85,6 +85,7 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
     await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
 
 # Handler for the /leaderboard command
+# Handler for the /leaderboard command
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
     user_rank = None
@@ -130,6 +131,11 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Add a footer or call-to-action
         footer = "\n🎮 *Keep playing to climb the leaderboard!*"
 
+        # Add a button to launch the app
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
+        ])
+
         if update.callback_query:
             # If triggered via callback query
             await update.callback_query.answer()
@@ -139,7 +145,9 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 animation="https://i.imgur.com/gdyscr0.gif"
             )
             await update.callback_query.edit_message_text(
-                header + rank_text + leaderboard_text + footer, parse_mode="Markdown"
+                header + rank_text + leaderboard_text + footer,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
             )
         else:
             # If triggered via the /leaderboard command
@@ -148,7 +156,9 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 animation="https://i.imgur.com/gdyscr0.gif"
             )
             await update.message.reply_text(
-                header + rank_text + leaderboard_text + footer, parse_mode="Markdown"
+                header + rank_text + leaderboard_text + footer,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
             )
 
     except Exception as e:
@@ -159,6 +169,7 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.callback_query.answer()
         else:
             await update.message.reply_text(error_message)
+
 
 # Handler for the button callback
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
