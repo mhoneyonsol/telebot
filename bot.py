@@ -70,7 +70,7 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
         [InlineKeyboardButton("💎 Launcher", url='https://t.me/nestortonbot/home')],
         [InlineKeyboardButton("👤 Channel", url='https://t.me/pxlonton')],
         [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
-        [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
+        [InlineKeyboardButton("🏆 Leaderboard", callback_data=None, url="https://t.me/YourBotUsername?start=leaderboard")],
         [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/pxltonbot')],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
