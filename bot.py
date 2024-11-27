@@ -51,14 +51,11 @@ def format_number(num):
 
 
 # Function to convert a timestamp to a readable format
-def convert_timestamp_to_custom_format(timestamp):
+def convert_timestamp_to_readable(timestamp):
     try:
         if isinstance(timestamp, int):  # Assume it's in milliseconds
             timestamp_seconds = timestamp // 1000
-            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d/%m/%y %H:%M:%S')
-        elif isinstance(timestamp, str):  # If already a string timestamp (e.g., Firestore)
-            parsed_date = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            return parsed_date.strftime('%d/%m/%y %H:%M:%S')
+            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d %B %Y, %H:%M:%S UTC')
         else:
             return "Not Available"
     except Exception as e:
@@ -210,9 +207,8 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tons_balance = user_data.get('tons_balance', '0')
             wallet_address = user_data.get('wallet_address', 'Not Linked')
 
-            # Convert timestamps to desired readable format
-            last_claim = convert_timestamp_to_custom_format(last_claim_timestamp)
-            last_session = convert_timestamp_to_custom_format(last_session_time)
+            # Convert timestamps to readable format
+            last_claim = convert_timestamp_to_readable(last_claim_timestamp)
 
             # Convert time on app to hours and minutes
             if isinstance(time_on_app, int):
@@ -233,7 +229,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📛 *Username*: `{username}`
 📅 *Claimed Days*: `{claimed_day}`
 🕒 *Last Claim*: `{last_claim}`
-📱 *Last Session*: `{last_session}`
+📱 *Last Session*: `{last_session_time}`
 🎮 *Level*: `{level}`
 ⏱️ *Time on App*: `{time_on_app_formatted}`
 💰 *Token Balance*: `{formatted_token_balance} NES`
@@ -278,6 +274,14 @@ Keep earning rewards and climbing the leaderboard! 🚀
         else:
             await update.message.reply_text(error_message)
 
+    except Exception as e:
+        logger.error(f"Error fetching profile for {username}: {e}")
+        error_message = "An error occurred while fetching your profile. Please try again later."
+        if update.callback_query:
+            await update.callback_query.edit_message_text(error_message)
+            await update.callback_query.answer()
+        else:
+            await update.message.reply_text(error_message)
 
 
 
