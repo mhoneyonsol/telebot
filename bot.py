@@ -50,13 +50,13 @@ def format_number(num):
     return str(num)  # For less than 1 thousand, return as-is
 
 
-# Function to convert a timestamp to a readable format
 def convert_timestamp_to_custom_format(timestamp):
     try:
         if isinstance(timestamp, int):  # Assume it's in milliseconds
             timestamp_seconds = timestamp // 1000
             return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d/%m/%y %H:%M:%S')
-        elif isinstance(timestamp, str):  # If already a string timestamp (e.g., Firestore)
+        elif isinstance(timestamp, str):  # ISO string timestamp from Firestore
+            # Parse ISO format and convert to desired format
             parsed_date = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
             return parsed_date.strftime('%d/%m/%y %H:%M:%S')
         else:
@@ -64,6 +64,7 @@ def convert_timestamp_to_custom_format(timestamp):
     except Exception as e:
         logger.error(f"Error converting timestamp: {e}")
         return "Not Available"
+
 
 
 # Handler for the /start command
