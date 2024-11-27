@@ -49,23 +49,6 @@ def format_number(num):
         return f"{num // 1_000}k"
     return str(num)  # For less than 1 thousand, return as-is
 
-def convert_timestamp_to_custom_format(timestamp):
-    try:
-        if isinstance(timestamp, int):  # Assume it's in milliseconds
-            timestamp_seconds = timestamp // 1000
-            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d/%m/%y %H:%M:%S')
-        elif isinstance(timestamp, str):  # ISO string timestamp from Firestore
-            # Parse ISO format string and convert to desired format
-            parsed_date = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-            return parsed_date.strftime('%d/%m/%y %H:%M:%S')
-        elif hasattr(timestamp, 'to_date'):  # If it's a Firestore Timestamp object
-            return timestamp.to_date().strftime('%d/%m/%y %H:%M:%S')
-        else:
-            return "Not Available"
-    except Exception as e:
-        logger.error(f"Error converting timestamp: {timestamp}, error: {e}")
-        return "Not Available"
-
 
 # Function to convert a timestamp to a readable format
 def convert_timestamp_to_readable(timestamp):
@@ -226,7 +209,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # Convert timestamps to readable format
             last_claim = convert_timestamp_to_readable(last_claim_timestamp)
-last_session = convert_timestamp_to_custom_format(last_session_time)
+
             # Convert time on app to hours and minutes
             if isinstance(time_on_app, int):
                 hours = time_on_app // 3600
