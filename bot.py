@@ -83,14 +83,17 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     leaderboard_text = "🏆 *Leaderboard* 🏆\n\n"
 
     try:
-        # Fetch leaderboard data from Firestore
+        # Fetch leaderboard data from Firestore, ordering by document ID
         leaderboard_ref = db.collection('mainleaderboard')
-        leaderboard_docs = leaderboard_ref.order_by('rank').stream()
+        leaderboard_docs = leaderboard_ref.stream()
+
+        # Sort documents based on their document ID (numeric rank)
+        sorted_docs = sorted(leaderboard_docs, key=lambda d: int(d.id))  # Sort by document name as rank
 
         # Build the leaderboard message
-        for doc in leaderboard_docs:
+        for doc in sorted_docs:
+            rank = int(doc.id)  # Document name is the rank
             data = doc.to_dict()
-            rank = data.get("rank")
             user = data.get("username")
             balance = data.get("token_balance", 0)
             level = data.get("level", 1)
@@ -110,6 +113,7 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error fetching leaderboard: {e}")
         await update.message.reply_text("An error occurred while fetching the leaderboard. Please try again later.")
+
 
 # Command to broadcast a message to all users
 async def send_update_to_all_users():
