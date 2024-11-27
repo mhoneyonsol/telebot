@@ -1,6 +1,6 @@
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
@@ -109,11 +109,18 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             rank_text = "Your rank is: Not Available\n\n"
 
-        await update.message.reply_text(rank_text + leaderboard_text, parse_mode="Markdown")
+        await update.callback_query.edit_message_text(rank_text + leaderboard_text, parse_mode="Markdown")
+        await update.callback_query.answer()
     except Exception as e:
         logger.error(f"Error fetching leaderboard: {e}")
-        await update.message.reply_text("An error occurred while fetching the leaderboard. Please try again later.")
+        await update.callback_query.edit_message_text("An error occurred while fetching the leaderboard. Please try again later.")
+        await update.callback_query.answer()
 
+# Handler for the button callback
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if query.data == 'leaderboard':
+        await leaderboard(update, context)
 
 # Command to broadcast a message to all users
 async def send_update_to_all_users():
@@ -153,7 +160,7 @@ def main():
 
     # Add command handlers
     application.add_handler(CommandHandler('start', start))
-    application.add_handler(CommandHandler('leaderboard', leaderboard))
+    application.add_handler(CallbackQueryHandler(button_handler))  # Add callback query handler for buttons
     application.add_handler(CommandHandler('broadcast', broadcast))
 
     # Start polling for updates
