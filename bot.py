@@ -1,3 +1,4 @@
+from datetime import datetime
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -47,6 +48,20 @@ def format_number(num):
     elif num >= 1_000:  # For 1 thousand and above
         return f"{num // 1_000}k"
     return str(num)  # For less than 1 thousand, return as-is
+
+
+# Function to convert a timestamp to a readable format
+def convert_timestamp_to_readable(timestamp):
+    try:
+        if isinstance(timestamp, int):  # Assume it's in milliseconds
+            timestamp_seconds = timestamp // 1000
+            return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d %B %Y, %H:%M:%S UTC')
+        else:
+            return "Not Available"
+    except Exception as e:
+        logger.error(f"Error converting timestamp: {e}")
+        return "Not Available"
+
 
 # Handler for the /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -193,15 +208,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             wallet_address = user_data.get('wallet_address', 'Not Linked')
 
             # Convert timestamps to readable format
-            if isinstance(last_claim_timestamp, int):
-                last_claim = f"<t:{last_claim_timestamp}:F>"
-            else:
-                last_claim = "Not Available"
-
-            if isinstance(last_session_time, str):
-                last_session = last_session_time
-            else:
-                last_session = "Not Available"
+            last_claim = convert_timestamp_to_readable(last_claim_timestamp)
 
             # Convert time on app to hours and minutes
             if isinstance(time_on_app, int):
@@ -222,7 +229,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 📛 *Username*: `{username}`
 📅 *Claimed Days*: `{claimed_day}`
 🕒 *Last Claim*: `{last_claim}`
-📱 *Last Session*: `{last_session}`
+📱 *Last Session*: `{last_session_time}`
 🎮 *Level*: `{level}`
 ⏱️ *Time on App*: `{time_on_app_formatted}`
 💰 *Token Balance*: `{formatted_token_balance} NES`
@@ -257,6 +264,15 @@ Keep earning rewards and climbing the leaderboard! 🚀
                 await update.callback_query.answer()
             else:
                 await update.message.reply_text(error_message)
+
+    except Exception as e:
+        logger.error(f"Error fetching profile for {username}: {e}")
+        error_message = "An error occurred while fetching your profile. Please try again later."
+        if update.callback_query:
+            await update.callback_query.edit_message_text(error_message)
+            await update.callback_query.answer()
+        else:
+            await update.message.reply_text(error_message)
 
     except Exception as e:
         logger.error(f"Error fetching profile for {username}: {e}")
