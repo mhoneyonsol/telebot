@@ -135,12 +135,12 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Highlight the user if they're viewing their rank
             if user == username:
                 user_rank = rank
-                leaderboard_text += f"🌟 **#{rank} - {user}** | 💰 {formatted_balance} NES | 🏅 Level {level}\n"
+                leaderboard_text += f"🌟 **{rank} - {user}** | 💰 {formatted_balance} NES | Lvl {level}\n"
             elif rank == 1:
                 # Highlight the top rank
-                leaderboard_text += f"🥇 **#{rank} - {user}** | 💰 {formatted_balance} NES | 🏅 Level {level}\n"
+                leaderboard_text += f"🥇 **{rank} - {user}** | 💰 {formatted_balance} NES | 🏅 Lvl {level}\n"
             else:
-                leaderboard_text += f"#{rank} - {user} | 💰 {formatted_balance} NES | 🏅 Level {level}\n"
+                leaderboard_text += f"{rank} - {user} | 💰 {formatted_balance} NES | Lvl {level}\n"
 
         # Add user's rank at the top
         if user_rank:
