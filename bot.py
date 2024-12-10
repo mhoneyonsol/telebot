@@ -67,16 +67,24 @@ def convert_timestamp_to_readable(timestamp):
 
 # Handler for the /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    username = update.effective_user.username or update.effective_user.first_name or "Player"
+    user = update.effective_user
+    username = user.username or user.first_name or "Player"
     chat_id = update.effective_chat.id
+    user_id = user.id  # Unique Telegram user ID
 
     # Save or update user data in Firestore
     user_doc_ref = db.collection('users').document(username)
     user_doc = user_doc_ref.get()
     if user_doc.exists:
-        user_doc_ref.update({"chat_id": chat_id})
+        user_doc_ref.update({
+            "chat_id": chat_id,
+            "user_id": user_id  
+        })
     else:
-        user_doc_ref.set({"chat_id": chat_id})
+        user_doc_ref.set({
+            "chat_id": chat_id,
+            "user_id": user_id  
+        })
 
     welcome_message = f"""
 🚀 *Welcome, {username}!* 
@@ -94,7 +102,7 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
     keyboard = [
         [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/home')],
         [InlineKeyboardButton("👾 Profile", callback_data='profile')],
-            [InlineKeyboardButton("🗯️ Channel", url='https://t.me/pxlonton')],
+        [InlineKeyboardButton("🗯️ Channel", url='https://t.me/pxlonton')],
         [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
         [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
         [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/pxltonbot')],
