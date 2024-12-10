@@ -55,8 +55,9 @@ except Exception as e:
 
 app = Quart(__name__)
 
+ALLOWED_ORIGIN = "https://pixelwar-b032d9ebe14e.herokuapp.com"
 
-
+app = cors(app, allow_origin=ALLOWED_ORIGIN)
 
 # Simple API key authentication
 def require_api_key(f):
