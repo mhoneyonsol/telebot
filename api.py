@@ -64,9 +64,43 @@ def require_api_key(f):
         return await f(*args, **kwargs)
     return decorated
 
+@app.route('/proxy/verify-membership', methods=['POST'])
+async def proxy_verify_membership():
+    """
+    This endpoint acts as a proxy for verifying Telegram membership.
+    It securely calls the main `/api/telegram/verify` endpoint with the API_KEY.
+    """
+    data = await request.get_json()
+    if not data or 'username' not in data:
+        logger.error("Missing 'username' in request body.")
+        return jsonify({'error': 'Missing username'}), 400
+
+    username = data['username']
+    logger.info(f"Proxy received request for username: {username}")
+
+    try:
+        # Call the internal verification endpoint with the API_KEY
+        url = "https://guarded-forest-98367-6965ee2800e6.herokuapp.com/api/telegram/verify"
+        headers = {"Content-Type": "application/json", "x-api-key": API_KEY}
+        payload = {"username": username}
+
+        # Use an asynchronous HTTP client to make the call
+        import aiohttp
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers=headers) as response:
+                result = await response.json()
+                return jsonify(result), response.status
+    except Exception as e:
+        logger.error(f"Error in proxy verification: {e}")
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/telegram/verify', methods=['POST'])
 @require_api_key
 async def verify_telegram_membership():
+    """
+    Main endpoint to verify Telegram membership.
+    This endpoint should not be directly accessible by the client-side code.
+    """
     data = await request.get_json()
     if not data or 'username' not in data:
         logger.error("Missing 'username' in request body.")
