@@ -1,13 +1,10 @@
-# api.py
-
-from flask import Flask, request, jsonify
+from quart import Quart, request, jsonify
 import telegram
 import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 import json
 from dotenv import load_dotenv
-from functools import wraps
 import logging
 
 # Load environment variables from .env file
@@ -21,9 +18,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Environment Variables
-API_TOKEN = os.getenv("API_TOKEN")  # Telegram Bot API Token
-CHANNEL_USERNAME = "@pxlonton"      # Your Telegram channel username
-API_KEY = os.getenv("API_KEY")      # Define a secure API key in your .env file
+API_TOKEN = os.getenv("API_TOKEN")  # Telegram Bot API token
+CHANNEL_USERNAME = "@pxlonton"  # Your Telegram channel username
+API_KEY = os.getenv("API_KEY")  # Secure API key for the Flask API
 
 # Initialize Telegram Bot
 bot = telegram.Bot(token=API_TOKEN)
@@ -53,25 +50,24 @@ except Exception as e:
     logger.error(f"Failed to initialize Firebase: {e}")
     exit(1)
 
-app = Flask(__name__)
+app = Quart(__name__)
 
 # Simple API key authentication
 def require_api_key(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
+    async def decorated(*args, **kwargs):
         if 'x-api-key' not in request.headers:
             logger.warning("API key missing in request headers.")
             return jsonify({'error': 'API key missing'}), 401
         if request.headers['x-api-key'] != API_KEY:
             logger.warning("Invalid API key provided.")
             return jsonify({'error': 'Invalid API key'}), 403
-        return f(*args, **kwargs)
+        return await f(*args, **kwargs)
     return decorated
 
 @app.route('/api/telegram/verify', methods=['POST'])
 @require_api_key
-def verify_telegram_membership():
-    data = request.get_json()
+async def verify_telegram_membership():
+    data = await request.get_json()
     if not data or 'username' not in data:
         logger.error("Missing 'username' in request body.")
         return jsonify({'error': 'Missing username'}), 400
@@ -95,7 +91,8 @@ def verify_telegram_membership():
         return jsonify({'error': 'User ID not found'}), 400
 
     try:
-        member = bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=int(user_id))
+        # Use await for asynchronous call
+        member = await bot.get_chat_member(chat_id=CHANNEL_USERNAME, user_id=int(user_id))
         status = member.status
         is_member = status in ['member', 'administrator', 'creator']
         logger.info(f"User '{username}' membership status: {status}")
@@ -108,5 +105,6 @@ def verify_telegram_membership():
         return jsonify({'error': f'Telegram API Error: {str(e)}'}), 500
 
 if __name__ == '__main__':
-    # Run the Flask app
-    app.run(host='0.0.0.0', port=5000)
+    # Run the Quart app with the dynamically assigned port from Heroku
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host='0.0.0.0', port=port)

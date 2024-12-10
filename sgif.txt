@@ -1,0 +1,2 @@
+venv\Scripts\activate                  activate env
+python api.py                          start
