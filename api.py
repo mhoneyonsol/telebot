@@ -1,4 +1,5 @@
 from quart import Quart, request, jsonify
+from quart_cors import cors
 import telegram
 import os
 import firebase_admin
@@ -6,6 +7,7 @@ from firebase_admin import credentials, firestore
 import json
 from dotenv import load_dotenv
 import logging
+
 
 # Load environment variables from .env file
 load_dotenv()
@@ -21,6 +23,7 @@ logger = logging.getLogger(__name__)
 API_TOKEN = os.getenv("API_TOKEN")  # Telegram Bot API token
 CHANNEL_USERNAME = "@pxlonton"  # Your Telegram channel username
 API_KEY = os.getenv("API_KEY")  # Secure API key for the Flask API
+
 
 # Initialize Telegram Bot
 bot = telegram.Bot(token=API_TOKEN)
@@ -51,6 +54,10 @@ except Exception as e:
     exit(1)
 
 app = Quart(__name__)
+
+ALLOWED_ORIGIN = "https://pixelwar-b032d9ebe14e.herokuapp.com"
+
+app = cors(app, allow_origin=ALLOWED_ORIGIN)
 
 # Simple API key authentication
 def require_api_key(f):
