@@ -66,27 +66,47 @@ def convert_timestamp_to_readable(timestamp):
 
 
 # Handler for the /start command
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+# Initialize a ThreadPoolExecutor
+executor = ThreadPoolExecutor()
+
+# Handler for the /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    username = user.username or user.first_name or "Player"
-    chat_id = update.effective_chat.id
-    user_id = user.id  # Unique Telegram user ID
+    try:
+        user = update.effective_user
+        username = user.username or user.first_name or "Player"
+        chat_id = update.effective_chat.id
+        user_id = user.id  # Unique Telegram user ID
 
-    # Save or update user data in Firestore
-    user_doc_ref = db.collection('users').document(username)
-    user_doc = user_doc_ref.get()
-    if user_doc.exists:
-        user_doc_ref.update({
-            "chat_id": chat_id,
-            "user_id": user_id  
-        })
-    else:
-        user_doc_ref.set({
-            "chat_id": chat_id,
-            "user_id": user_id  
-        })
+        logger.info(f"User '{username}' with ID '{user_id}' started the bot.")
 
-    welcome_message = f"""
+        # Save or update user data in Firestore
+        user_doc_ref = db.collection('users').document(username)
+
+        loop = asyncio.get_event_loop()
+
+        # Run Firestore 'get' operation in a separate thread
+        user_doc = await loop.run_in_executor(executor, user_doc_ref.get)
+
+        if user_doc.exists:
+            # Run Firestore 'update' operation in a separate thread
+            await loop.run_in_executor(executor, user_doc_ref.update, {
+                "chat_id": chat_id,
+                "user_id": user_id  # Add user_id here
+            })
+            logger.info(f"Updated Firestore for user '{username}'.")
+        else:
+            # Run Firestore 'set' operation in a separate thread
+            await loop.run_in_executor(executor, user_doc_ref.set, {
+                "chat_id": chat_id,
+                "user_id": user_id  # Add user_id here
+            })
+            logger.info(f"Set Firestore for new user '{username}'.")
+
+        # Define the welcome message
+        welcome_message = f"""
 🚀 *Welcome, {username}!* 
 
 Step into *Nestor LABS*, where the excitement of gaming meets the power of the TON blockchain.
@@ -99,16 +119,31 @@ Step into *Nestor LABS*, where the excitement of gaming meets the power of the T
 
 Ready to join the battle for NES? Start farming, trading, and earning on TON today with Nestor LABS!
     """
-    keyboard = [
-        [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/home')],
-        [InlineKeyboardButton("👾 Profile", callback_data='profile')],
-        [InlineKeyboardButton("🗯️ Channel", url='https://t.me/pxlonton')],
-        [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
-        [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
-        [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/pxltonbot')],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
+
+        # Define the keyboard layout
+        keyboard = [
+            [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/home')],
+            [InlineKeyboardButton("👾 Profile", callback_data='profile')],
+            [InlineKeyboardButton("🗯️ Channel", url='https://t.me/pxlonton')],
+            [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
+            [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
+            [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/pxltonbot')],
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        logger.info("Sending welcome message to the user.")
+
+        # Send the welcome message
+        await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
+
+        logger.info("Welcome message sent successfully.")
+
+    except Exception as e:
+        logger.error(f"Error in /start handler: {e}")
+        try:
+            await update.message.reply_text("An error occurred while processing your request. Please try again later.")
+        except Exception as inner_e:
+            logger.error(f"Failed to send error message to user: {inner_e}")
 
 
 
