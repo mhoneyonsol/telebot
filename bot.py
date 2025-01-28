@@ -335,14 +335,23 @@ async def send_update_to_all_users():
     users_ref = db.collection('users')
     docs = users_ref.stream()
 
-    update_message = "🔔 *Update Alert!* We've made some changes you can now access profile info directly on bot 😎"
+    update_message = """🎮 *New Game Alert!* 
 
-    # URL to the WEBP image you want to send
+🚀 We're excited to announce our brand new Unity game is now available for testing!
+
+🎯 *Runner* - An exciting new gaming experience
+👾 Currently in Alpha phase
+🔥 Be among the first to try it out!
+
+Your feedback will help us make the game even better! 🌟"""
+
+    # URL to an exciting gaming/launch related gif
     gif_url = 'https://i.imgur.com/ScFz9BY.gif'
 
-     # Inline keyboard with a button to launch the app
+    # Inline keyboard with buttons to launch the game and view profile
     keyboard = InlineKeyboardMarkup([
-        [InlineKeyboardButton("View Profile", callback_data='profile')],
+        [InlineKeyboardButton("🎮 Play Runner", url='https://t.me/nestortonbot/Runner')],
+        [InlineKeyboardButton("👤 View Profile", callback_data='profile')]
     ])
 
     for doc in docs:
@@ -350,12 +359,18 @@ async def send_update_to_all_users():
         chat_id = user_data.get("chat_id")
         if chat_id:
             try:
-                # Send the photo from the URL with the message
-                await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=update_message, parse_mode='Markdown',reply_markup=keyboard)
-                logger.info(f"Message sent to chat_id {chat_id}")
+                await bot.send_animation(
+                    chat_id=chat_id,
+                    animation=gif_url,
+                    caption=update_message,
+                    parse_mode='Markdown',
+                    reply_markup=keyboard
+                )
+                logger.info(f"New game announcement sent to chat_id {chat_id}")
+                # Add a small delay to avoid hitting rate limits
+                await asyncio.sleep(0.1)
             except Exception as e:
-                logger.error(f"Failed to send message to chat_id {chat_id}: {e}")
-
+                logger.error(f"Failed to send game announcement to chat_id {chat_id}: {e}")
 
 
 # Command to broadcast message to all users, restricted to admin
