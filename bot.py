@@ -109,7 +109,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         welcome_message = f"""
 🚀 *Welcome, {username}!* 
 
-Step into *Nestor LABS*, where the excitement of gaming meets the power of the TON blockchain.
+Step into *Tokearn*, where the excitement of gaming meets the power of the TON blockchain.
 
 💸 *Earn Real Rewards*: From daily rewards to seasonal events, there’s always a new way to boost your NES wallet and dominate the leaderboard.
 
@@ -123,9 +123,9 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
         # Define the keyboard layout
         keyboard = [
             [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/home')],
-            [InlineKeyboardButton("🚀 Stardust", url='https://t.me/nestortonbot/Stardust')],
-            [InlineKeyboardButton("💥 Runner", url='https://t.me/nestortonbot/Runner')],
-            [InlineKeyboardButton("👾 Profile", callback_data='profile')],
+            [InlineKeyboardButton("👾 Stardust", url='https://t.me/nestortonbot/Stardust')],
+            [InlineKeyboardButton("👾 Runner", url='https://t.me/nestortonbot/Runner')],
+            [InlineKeyboardButton("👤 Profile", callback_data='profile')],
             [InlineKeyboardButton("🗯️ Channel", url='https://t.me/pxlonton')],
             [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
             [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
