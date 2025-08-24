@@ -122,7 +122,7 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
 
         # Define the keyboard layout
         keyboard = [
-            [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/home')],
+            [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/hello')],
             [InlineKeyboardButton("👾 Stardust", url='https://t.me/nestortonbot/Stardust')],
             [InlineKeyboardButton("👾 Runner", url='https://t.me/nestortonbot/Runner')],
             [InlineKeyboardButton("👤 Profile", callback_data='profile')],
