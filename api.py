@@ -55,9 +55,14 @@ except Exception as e:
 
 app = Quart(__name__)
 
-ALLOWED_ORIGIN = "https://tokearn-a67df5f503a2.herokuapp.com/"
+ALLOWED_ORIGIN = "https://tokearn-a67df5f503a2.herokuapp.com"
 
-app = cors(app, allow_origin=ALLOWED_ORIGIN)
+app = cors(app, allow_origin=[
+    "https://tokearn-a67df5f503a2.herokuapp.com",
+    "https://t.me",
+    "https://telegram.org"
+], allow_methods=['GET', 'POST', 'OPTIONS'], 
+allow_headers=['Content-Type', 'Authorization', 'x-api-key'])
 
 # Simple API key authentication
 def require_api_key(f):
