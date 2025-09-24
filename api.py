@@ -146,47 +146,6 @@ async def verify_telegram_membership():
         return jsonify({'error': f'Telegram API Error: {str(e)}'}), 500
 
 
-@app.route('/api/create-stars-invoice', methods=['POST'])
-@require_api_key
-async def create_stars_invoice():
-    """
-    Créer une facture Telegram Stars
-    """
-    try:
-        data = await request.get_json()
-        if not data:
-            return jsonify({'error': 'Missing request data'}), 400
-
-        amount = data.get('amount')
-        description = data.get('description', 'Premium purchase')
-        user_id = data.get('userId')
-        
-        if not amount or not user_id:
-            return jsonify({'error': 'Missing amount or userId'}), 400
-
-        logger.info(f"Creating Stars invoice: {amount} stars for user {user_id}")
-
-        # Créer la facture avec l'API Telegram Bot
-        invoice = await bot.create_invoice_link(
-            title="Premium Purchase",
-            description=description,
-            payload=f"stars_payment_{user_id}_{amount}",
-            provider_token="",  # Vide pour Telegram Stars
-            currency="XTR",  # Telegram Stars currency
-            prices=[telegram.LabeledPrice(label=description, amount=amount)]
-        )
-
-        logger.info(f"Invoice created successfully: {invoice}")
-        
-        return jsonify({
-            'success': True,
-            'invoice_url': invoice
-        })
-
-    except Exception as e:
-        logger.error(f"Error creating Stars invoice: {e}")
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/public/create-stars-invoice', methods=['POST'])
 async def create_stars_invoice_public():
     """
