@@ -7,6 +7,7 @@ import firebase_admin
 from firebase_admin import credentials, firestore
 import os
 import json
+from telegram.ext import PreCheckoutQueryHandler, MessageHandler, filters
 
 # Load environment variables from .env file
 load_dotenv()
@@ -392,16 +393,51 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif query.data == 'profile':
         await profile(update, context)
 
+
+
+# Gestionnaire pour les pre-checkout queries (obligatoire)
+async def pre_checkout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestionnaire pour les requêtes de pre-checkout"""
+    query = update.pre_checkout_query
+    
+    # Vérifier la validité du payload
+    if query.invoice_payload.startswith('stars_payment_'):
+        await query.answer(ok=True)
+        logger.info(f"Pre-checkout approved for {query.from_user.username}")
+    else:
+        await query.answer(ok=False, error_message="Invalid payment payload")
+        logger.warning(f"Pre-checkout rejected for {query.from_user.username}")
+
+# Gestionnaire pour les paiements réussis
+async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Gestionnaire pour les paiements réussis"""
+    payment = update.message.successful_payment
+    user = update.effective_user
+    
+    logger.info(f"Successful payment from {user.username}: {payment.total_amount} XTR")
+    
+    # Traiter le paiement et accorder les avantages premium
+    await update.message.reply_text(
+        f"✅ Paiement de {payment.total_amount} ⭐ réussi !\n"
+        f"Merci pour votre achat premium 🌟"
+    )
+
+
+
 # Main function to set up the bot
 def main():
     application = ApplicationBuilder().token(API_TOKEN).build()
 
-    # Add command handlers
+    # Add command handlers (existants)
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('broadcast', broadcast))
-    application.add_handler(CommandHandler('leaderboard', leaderboard))  # Add command handler for /leaderboard
-    application.add_handler(CommandHandler('profile', profile))  # Add command handler for /profile
-    application.add_handler(CallbackQueryHandler(button_handler))  # Add callback query handler for buttons
+    application.add_handler(CommandHandler('leaderboard', leaderboard))
+    application.add_handler(CommandHandler('profile', profile))
+    application.add_handler(CallbackQueryHandler(button_handler))
+    
+    # NOUVEAUX gestionnaires pour les paiements Stars
+    application.add_handler(PreCheckoutQueryHandler(pre_checkout_handler))
+    application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
     # Start polling for updates
     application.run_polling()
