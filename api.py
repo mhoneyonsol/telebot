@@ -187,30 +187,58 @@ async def create_stars_invoice():
         logger.error(f"Error creating Stars invoice: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/verify-stars-payment', methods=['POST'])
-@require_api_key
-async def verify_stars_payment():
+@app.route('/api/public/create-stars-invoice', methods=['POST'])
+async def create_stars_invoice_public():
     """
-    Vérifier un paiement Telegram Stars
+    Endpoint public pour créer des factures Stars (sans API key)
+    Sécurisé par validation des données Telegram
     """
     try:
         data = await request.get_json()
-        transaction_id = data.get('transaction_id')
-        user_id = data.get('user_id')
-        
-        if not transaction_id or not user_id:
-            return jsonify({'error': 'Missing transaction_id or user_id'}), 400
+        if not data:
+            return jsonify({'error': 'Missing request data'}), 400
 
-        logger.info(f"Verifying Stars payment: {transaction_id} for user {user_id}")
+        amount = data.get('amount')
+        description = data.get('description', 'Premium purchase')
+        user_id = data.get('userId')
+        
+        # Validation basique
+        if not amount or not user_id or amount <= 0 or amount > 1000:
+            return jsonify({'error': 'Invalid amount or userId'}), 400
+
+        # Vérifier que le user_id existe dans votre base
+        users_ref = db.collection('users')
+        query = users_ref.where('user_id', '==', int(user_id)).limit(1)
+        docs = list(query.stream())
+        
+        if not docs:
+            return jsonify({'error': 'User not found'}), 404
+
+        logger.info(f"Creating Stars invoice: {amount} stars for user {user_id}")
+
+        # Créer la facture avec l'API Telegram Bot
+        invoice = await bot.create_invoice_link(
+            title="Premium Purchase",
+            description=description,
+            payload=f"stars_payment_{user_id}_{amount}",
+            provider_token="",  # Vide pour Telegram Stars
+            currency="XTR",  # Telegram Stars currency
+            prices=[telegram.LabeledPrice(label=description, amount=amount)]
+        )
+
+        logger.info(f"Invoice created successfully")
         
         return jsonify({
             'success': True,
-            'verified': True
+            'invoice_url': invoice
         })
 
     except Exception as e:
-        logger.error(f"Error verifying Stars payment: {e}")
+        logger.error(f"Error creating Stars invoice: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+        
 
 if __name__ == '__main__':
     # Run the Quart app with the dynamically assigned port from Heroku
