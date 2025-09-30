@@ -79,9 +79,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user = update.effective_user
         username = user.username or user.first_name or "Player"
         chat_id = update.effective_chat.id
-        user_id = user.id  # Unique Telegram user ID
+        user_id = user.id
 
-        # 🆕 EXTRAIRE LE CODE DE RÉFÉRENCE
+        # Extraire le code de référence
         referral_code = None
         if context.args and len(context.args) > 0:
             arg = context.args[0]
@@ -91,13 +91,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logger.info(f"User '{username}' with ID '{user_id}' started the bot.")
 
-        # Save or update user data in Firestore
+        # Save user data in Firestore
         user_doc_ref = db.collection('users').document(username)
-
         loop = asyncio.get_event_loop()
         user_doc = await loop.run_in_executor(executor, user_doc_ref.get)
 
-        # 🆕 STOCKER LE CODE DE RÉFÉRENCE
         user_data = {
             "chat_id": chat_id,
             "user_id": user_id
@@ -105,16 +103,30 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if referral_code:
             user_data["pending_referral_code"] = referral_code
-            logger.info(f"Stored pending referral code for {username}")
 
         if user_doc.exists:
             await loop.run_in_executor(executor, user_doc_ref.update, user_data)
-            logger.info(f"Updated Firestore for user '{username}'.")
         else:
             await loop.run_in_executor(executor, user_doc_ref.set, user_data)
-            logger.info(f"Set Firestore for new user '{username}'.")
 
-        # Define the welcome message
+        # 🆕 SI CODE DE RÉFÉRENCE → OUVRIR LA WEBAPP DIRECTEMENT
+        if referral_code:
+            webapp_url = f'https://t.me/nestortonbot/hello?startapp=ref_{referral_code}'
+            
+            keyboard = [[InlineKeyboardButton("🎮 Launch Game Now", url=webapp_url)]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            welcome_message = f"""
+🎉 *Welcome, {username}!*
+
+You've been invited to join Tokearn! 🚀
+
+Click below to start earning NES tokens right away! 👇
+"""
+            await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
+            return
+
+        # Message normal pour les utilisateurs sans code de référence
         welcome_message = f"""
 🚀 *Welcome, {username}!* 
 
@@ -127,37 +139,25 @@ Step into *Tokearn*, where the excitement of gaming meets the power of the TON b
 🔗 *Seamless Wallet Integration*: Connect your TON wallet to track your rewards, manage assets, and unlock real token rewards along with exclusive airdrops.
 
 Ready to join the battle for NES? Start farming, trading, and earning on TON today with Nestor LABS!
-    """
+"""
 
-        # 🆕 MODIFIER LE BOUTON DE LANCEMENT POUR INCLURE LE CODE
-        webapp_url = 'https://t.me/nestortonbot/hello'
-        if referral_code:
-            webapp_url = f'https://t.me/nestortonbot/hello?startapp=ref_{referral_code}'
-
-        # Define the keyboard layout
         keyboard = [
-            [InlineKeyboardButton("💎 Launch dApp", url=webapp_url)],
+            [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/hello')],
             [InlineKeyboardButton("👾 Stardust", url='https://t.me/nestortonbot/Stardust')],
             [InlineKeyboardButton("👾 Runner", url='https://t.me/nestortonbot/Runner')],
             [InlineKeyboardButton("👤 Profile", callback_data='profile')],
             [InlineKeyboardButton("🗯️ Channel", url='https://t.me/pxlonton')],
             [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
             [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
-            [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/pxltonbot')],
+            [InlineKeyboardButton("📢 Invite Friends", url='https://t.me/share/url?url=https://t.me/nestortonbot')],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        logger.info("Sending welcome message to the user.")
         await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
-        logger.info("Welcome message sent successfully.")
 
     except Exception as e:
         logger.error(f"Error in /start handler: {e}")
-        try:
-            await update.message.reply_text("An error occurred while processing your request. Please try again later.")
-        except Exception as inner_e:
-            logger.error(f"Failed to send error message to user: {inner_e}")
-
+        await update.message.reply_text("An error occurred. Please try again later.")
 
 
 # Handler for the /leaderboard command
