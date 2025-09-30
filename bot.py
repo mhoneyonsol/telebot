@@ -146,6 +146,7 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
             [InlineKeyboardButton("👾 Stardust", url='https://t.me/nestortonbot/Stardust')],
             [InlineKeyboardButton("👾 Runner", url='https://t.me/nestortonbot/Runner')],
             [InlineKeyboardButton("👤 Profile", callback_data='profile')],
+            [InlineKeyboardButton("📢 Get My Referral Link", callback_data='referral')],  # ✅ NOUVEAU
             [InlineKeyboardButton("🗯️ Channel", url='https://t.me/pxlonton')],
             [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
             [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
@@ -390,6 +391,107 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(error_message)
 
+
+async def referral_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handler for referral link button"""
+    username = update.effective_user.username or update.effective_user.first_name
+    
+    try:
+        # Fetch user data from Firestore
+        user_doc_ref = db.collection('users').document(username)
+        user_doc = user_doc_ref.get()
+        
+        if not user_doc.exists:
+            # User hasn't launched app yet
+            message = """
+❌ *Launch the app first!*
+
+You need to open the Tokearn app at least once to generate your referral link.
+
+Click below to launch the app:
+"""
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/hello")]
+            ])
+            
+            await update.callback_query.answer()
+            await update.callback_query.message.reply_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+            return
+        
+        user_data = user_doc.to_dict()
+        referral_code = user_data.get('referral_code')
+        
+        if not referral_code:
+            # No referral code yet
+            message = """
+❌ *Referral code not found!*
+
+Please open the app to generate your referral code, then try again.
+"""
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/hello")]
+            ])
+            
+            await update.callback_query.answer()
+            await update.callback_query.message.reply_text(
+                message,
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+            return
+        
+        # Generate referral link
+        referral_link = f"https://t.me/nestortonbot?start=ref_{referral_code}"
+        
+        # Get stats
+        friends_invited = user_data.get('friends_invited', 0)
+        tokens_earned = user_data.get('referral_tokens_earned', 0)
+        
+        message = f"""
+🎉 *Your Referral Link*
+
+Share this link to invite friends and earn rewards!
+
+`{referral_link}`
+
+📊 *Your Stats:*
+👥 Friends Invited: {friends_invited}
+💰 Tokens Earned: {format_number(tokens_earned)} NES
+
+🎁 *Rewards:*
+- 1 friend = 1,000 NES
+- 5 friends = 6,000 NES + Recruteur Badge
+- 10 friends = 10,500 NES + Ambassadeur Badge
+- 25 friends = 50,000 NES + Legend Badge
+- 50 friends = 150,000 NES + Elite Badge
+
+Start sharing now! 🚀
+"""
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📤 Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join me on Tokearn! Earn NES tokens by playing games!")],
+            [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")]
+        ])
+        
+        await update.callback_query.answer()
+        await update.callback_query.message.reply_text(
+            message,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        
+        logger.info(f"Referral link sent to {username}")
+        
+    except Exception as e:
+        logger.error(f"Error getting referral link for {username}: {e}")
+        await update.callback_query.answer("An error occurred. Please try again.")
+
+
+
 # Function to send a message to all users
 async def send_update_to_all_users():
     bot = Bot(token=API_TOKEN)
@@ -452,6 +554,8 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await leaderboard(update, context)
     elif query.data == 'profile':
         await profile(update, context)
+    elif query.data == 'referral':  # ✅ NOUVEAU
+        await referral_link(update, context)
 
 
 
