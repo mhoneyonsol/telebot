@@ -81,29 +81,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = update.effective_chat.id
         user_id = user.id  # Unique Telegram user ID
 
+        # 🆕 EXTRAIRE LE CODE DE RÉFÉRENCE
+        referral_code = None
+        if context.args and len(context.args) > 0:
+            arg = context.args[0]
+            if arg.startswith('ref_'):
+                referral_code = arg.replace('ref_', '')
+                logger.info(f"Referral code detected: {referral_code}")
+
         logger.info(f"User '{username}' with ID '{user_id}' started the bot.")
 
         # Save or update user data in Firestore
         user_doc_ref = db.collection('users').document(username)
 
         loop = asyncio.get_event_loop()
-
-        # Run Firestore 'get' operation in a separate thread
         user_doc = await loop.run_in_executor(executor, user_doc_ref.get)
 
+        # 🆕 STOCKER LE CODE DE RÉFÉRENCE
+        user_data = {
+            "chat_id": chat_id,
+            "user_id": user_id
+        }
+        
+        if referral_code:
+            user_data["pending_referral_code"] = referral_code
+            logger.info(f"Stored pending referral code for {username}")
+
         if user_doc.exists:
-            # Run Firestore 'update' operation in a separate thread
-            await loop.run_in_executor(executor, user_doc_ref.update, {
-                "chat_id": chat_id,
-                "user_id": user_id  # Add user_id here
-            })
+            await loop.run_in_executor(executor, user_doc_ref.update, user_data)
             logger.info(f"Updated Firestore for user '{username}'.")
         else:
-            # Run Firestore 'set' operation in a separate thread
-            await loop.run_in_executor(executor, user_doc_ref.set, {
-                "chat_id": chat_id,
-                "user_id": user_id  # Add user_id here
-            })
+            await loop.run_in_executor(executor, user_doc_ref.set, user_data)
             logger.info(f"Set Firestore for new user '{username}'.")
 
         # Define the welcome message
@@ -112,7 +120,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 Step into *Tokearn*, where the excitement of gaming meets the power of the TON blockchain.
 
-💸 *Earn Real Rewards*: From daily rewards to seasonal events, there’s always a new way to boost your NES wallet and dominate the leaderboard.
+💸 *Earn Real Rewards*: From daily rewards to seasonal events, there's always a new way to boost your NES wallet and dominate the leaderboard.
 
 🎮 *Endless Fun & Updates*: Dive into a wide range of games with frequent updates to keep the experience fresh and thrilling!
 
@@ -121,9 +129,14 @@ Step into *Tokearn*, where the excitement of gaming meets the power of the TON b
 Ready to join the battle for NES? Start farming, trading, and earning on TON today with Nestor LABS!
     """
 
+        # 🆕 MODIFIER LE BOUTON DE LANCEMENT POUR INCLURE LE CODE
+        webapp_url = 'https://t.me/nestortonbot/hello'
+        if referral_code:
+            webapp_url = f'https://t.me/nestortonbot/hello?startapp=ref_{referral_code}'
+
         # Define the keyboard layout
         keyboard = [
-            [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/hello')],
+            [InlineKeyboardButton("💎 Launch dApp", url=webapp_url)],
             [InlineKeyboardButton("👾 Stardust", url='https://t.me/nestortonbot/Stardust')],
             [InlineKeyboardButton("👾 Runner", url='https://t.me/nestortonbot/Runner')],
             [InlineKeyboardButton("👤 Profile", callback_data='profile')],
@@ -135,10 +148,7 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
         reply_markup = InlineKeyboardMarkup(keyboard)
 
         logger.info("Sending welcome message to the user.")
-
-        # Send the welcome message
         await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
-
         logger.info("Welcome message sent successfully.")
 
     except Exception as e:
@@ -147,7 +157,6 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
             await update.message.reply_text("An error occurred while processing your request. Please try again later.")
         except Exception as inner_e:
             logger.error(f"Failed to send error message to user: {inner_e}")
-
 
 
 
