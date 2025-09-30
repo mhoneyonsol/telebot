@@ -8,6 +8,7 @@ import json
 from dotenv import load_dotenv
 import logging
 from bot import send_referral_notification
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 
 # Load environment variables from .env file
@@ -217,22 +218,21 @@ async def notify_referral():
         logger.info(f"Sending referral notification: {new_user} joined via {referrer}'s link")
         
         # Get referrer's chat_id from Firebase
-        try:
-            referrer_doc = db.collection('users').document(referrer).get()
-            
-            if not referrer_doc.exists:
-                logger.warning(f"Referrer {referrer} not found in Firebase")
-                return jsonify({'error': 'Referrer not found'}), 404
-            
-            referrer_data = referrer_doc.to_dict()
-            chat_id = referrer_data.get('chat_id')
-            
-            if not chat_id:
-                logger.warning(f"No chat_id for referrer {referrer}")
-                return jsonify({'error': 'No chat_id'}), 404
-            
-            # Create notification message
-            message = f"""
+        referrer_doc = db.collection('users').document(referrer).get()
+        
+        if not referrer_doc.exists:
+            logger.warning(f"Referrer {referrer} not found in Firebase")
+            return jsonify({'error': 'Referrer not found'}), 404
+        
+        referrer_data = referrer_doc.to_dict()
+        chat_id = referrer_data.get('chat_id')
+        
+        if not chat_id:
+            logger.warning(f"No chat_id for referrer {referrer}")
+            return jsonify({'error': 'No chat_id'}), 404
+        
+        # Create notification message
+        message = f"""
 🎉 *Congratulations!*
 
 *{new_user}* just joined our community using your referral link!
@@ -241,29 +241,23 @@ async def notify_referral():
 
 Keep sharing to unlock bigger rewards! 🚀
 """
-            
-            # Create keyboard
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
-                [InlineKeyboardButton("📢 Share Again", url=f"https://t.me/share/url?url=https://t.me/nestortonbot?start=ref_{referrer_data.get('referral_code', '')}")]
-            ])
-            
-            # Send notification using bot
-            import telegram
-            bot_instance = telegram.Bot(token=API_TOKEN)
-            await bot_instance.send_message(
-                chat_id=chat_id,
-                text=message,
-                parse_mode='Markdown',
-                reply_markup=keyboard
-            )
-            
-            logger.info(f"Telegram notification sent to {referrer} (chat_id: {chat_id})")
-            return jsonify({'success': True})
-            
-        except Exception as e:
-            logger.error(f"Error sending Telegram notification: {e}")
-            return jsonify({'error': str(e)}), 500
+        
+        # Create keyboard
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
+            [InlineKeyboardButton("📢 Share Again", url=f"https://t.me/share/url?url=https://t.me/nestortonbot?start=ref_{referrer_data.get('referral_code', '')}")]
+        ])
+        
+        # Send notification
+        await bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        
+        logger.info(f"Telegram notification sent to {referrer} (chat_id: {chat_id})")
+        return jsonify({'success': True})
         
     except Exception as e:
         logger.error(f"Error in notify-referral endpoint: {e}")
