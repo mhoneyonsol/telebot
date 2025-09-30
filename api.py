@@ -7,6 +7,7 @@ from firebase_admin import credentials, firestore
 import json
 from dotenv import load_dotenv
 import logging
+from bot import send_referral_notification
 
 
 # Load environment variables from .env file
@@ -201,7 +202,27 @@ async def create_stars_invoice_public():
         logger.error(f"Error creating Stars invoice: {e}")
         return jsonify({'error': str(e)}), 500
 
-
+@app.route('/api/notify-referral', methods=['POST'])
+async def notify_referral():
+    """Endpoint to send referral notification"""
+    try:
+        data = await request.get_json()
+        
+        if not data or 'referrer' not in data or 'new_user' not in data:
+            return jsonify({'error': 'Missing parameters'}), 400
+        
+        referrer = data['referrer']
+        new_user = data['new_user']
+        
+        # Send notification asynchronously
+        import asyncio
+        await send_referral_notification(referrer, new_user)
+        
+        return jsonify({'success': True})
+        
+    except Exception as e:
+        logger.error(f"Error in notify-referral endpoint: {e}")
+        return jsonify({'error': str(e)}), 500
         
 
 if __name__ == '__main__':

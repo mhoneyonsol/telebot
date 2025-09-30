@@ -160,6 +160,57 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
         await update.message.reply_text("An error occurred. Please try again later.")
 
 
+
+async def send_referral_notification(referrer_username, new_user_username):
+    """Send Telegram notification when someone joins via referral"""
+    try:
+        # Get referrer's chat_id
+        referrer_doc = db.collection('users').document(referrer_username).get()
+        
+        if not referrer_doc.exists:
+            logger.warning(f"Referrer {referrer_username} not found")
+            return
+        
+        referrer_data = referrer_doc.to_dict()
+        chat_id = referrer_data.get('chat_id')
+        
+        if not chat_id:
+            logger.warning(f"No chat_id for {referrer_username}")
+            return
+        
+        # Create notification message
+        message = f"""
+🎉 *Great News!*
+
+*{new_user_username}* just joined Tokearn using your referral link!
+
+💰 You've earned *1,000 NES* tokens!
+
+Keep sharing to unlock more rewards! 🚀
+"""
+        
+        # Create keyboard with action button
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
+            [InlineKeyboardButton("📢 Share Again", url="https://t.me/share/url?url=https://t.me/nestortonbot")]
+        ])
+        
+        # Send notification
+        bot = Bot(token=API_TOKEN)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=message,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        
+        logger.info(f"Referral notification sent to {referrer_username}")
+        
+    except Exception as e:
+        logger.error(f"Error sending referral notification: {e}")
+
+
+
 # Handler for the /leaderboard command
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
