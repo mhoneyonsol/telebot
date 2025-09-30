@@ -66,6 +66,11 @@ app = cors(app, allow_origin=[
 ], allow_methods=['GET', 'POST', 'OPTIONS'], 
 allow_headers=['Content-Type', 'Authorization', 'x-api-key'])
 
+@app.route('/api/notify-referral', methods=['OPTIONS'])
+async def notify_referral_options():
+    """Handle preflight requests"""
+    return '', 204
+
 # Simple API key authentication
 def require_api_key(f):
     async def decorated(*args, **kwargs):
