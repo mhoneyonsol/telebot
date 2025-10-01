@@ -339,6 +339,71 @@ Keep sharing to unlock bigger rewards! 🚀
         return jsonify({'error': str(e)}), 500
         
 
+
+@app.route('/api/notify-level-bonus', methods=['POST', 'OPTIONS'])
+async def notify_level_bonus():
+    """Notify referrer when their friend levels up"""
+    
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        data = await request.get_json()
+        
+        if not data or 'referrer' not in data or 'friend' not in data:
+            return jsonify({'error': 'Missing parameters'}), 400
+        
+        referrer = data['referrer']
+        friend = data['friend']
+        level = data.get('level', 0)
+        bonus = data.get('bonus', 0)
+        
+        logger.info(f"Level bonus notification: {friend} reached level {level}")
+        
+        referrer_doc = db.collection('users').document(referrer).get()
+        
+        if not referrer_doc.exists:
+            return jsonify({'error': 'Referrer not found'}), 404
+        
+        referrer_data = referrer_doc.to_dict()
+        chat_id = referrer_data.get('chat_id')
+        
+        if not chat_id:
+            return jsonify({'error': 'No chat_id'}), 404
+        
+        message = f"""
+🎉 *Level Up Bonus!*
+
+Your friend *{friend}* just reached *Level {level}*!
+
+💰 You earned *{bonus:,} NES* tokens!
+
+Keep encouraging your friends to play! 🚀
+"""
+        
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
+            [InlineKeyboardButton("👥 View Referrals", url="https://t.me/nestortonbot/hello#referral")]
+        ])
+        
+        await bot.send_message(
+            chat_id=int(chat_id),
+            text=message,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        
+        logger.info(f"Level bonus notification sent to {referrer}")
+        return jsonify({'success': True}), 200
+        
+    except Exception as e:
+        logger.error(f"Error in notify-level-bonus: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+
 if __name__ == '__main__':
     # Run the Quart app with the dynamically assigned port from Heroku
     port = int(os.environ.get("PORT", 5000))
