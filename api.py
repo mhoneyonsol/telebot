@@ -46,11 +46,18 @@ firebase_config = {
 }
 
 # Initialize Firebase Admin SDK
+# Initialize Firebase Admin SDK
 try:
-    cred = credentials.Certificate(json.loads(json.dumps(firebase_config)))
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
-    logger.info("Firebase initialized successfully.")
+    # Utilise une app Firebase avec un nom unique pour api.py
+    try:
+        app_firebase = firebase_admin.get_app('api_app')
+    except ValueError:
+        # L'app n'existe pas encore, on la crée
+        cred = credentials.Certificate(json.loads(json.dumps(firebase_config)))
+        app_firebase = firebase_admin.initialize_app(cred, name='api_app')
+    
+    db = firestore.client(app=app_firebase)
+    logger.info("Firebase initialized successfully for API.")
 except Exception as e:
     logger.error(f"Failed to initialize Firebase: {e}")
     exit(1)
