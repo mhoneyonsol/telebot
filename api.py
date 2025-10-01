@@ -215,64 +215,127 @@ async def create_stars_invoice_public():
         logger.error(f"Error creating Stars invoice: {e}")
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/notify-referral', methods=['POST'])
+@app.route('/api/notify-referral', methods=['POST', 'OPTIONS'])
 async def notify_referral():
     """Endpoint to send referral notification"""
+    
+    # Handle preflight CORS
+    if request.method == 'OPTIONS':
+        return '', 204
+    
     try:
         data = await request.get_json()
         
         if not data or 'referrer' not in data or 'new_user' not in data:
+            logger.error("Missing parameters in notify-referral request")
             return jsonify({'error': 'Missing parameters'}), 400
         
         referrer = data['referrer']
         new_user = data['new_user']
         
-        logger.info(f"Sending referral notification: {new_user} joined via {referrer}'s link")
+        logger.info(f"Processing referral notification: {new_user} -> {referrer}")
         
         # Get referrer's chat_id from Firebase
-        referrer_doc = db.collection('users').document(referrer).get()
+        try:
+            referrer_doc = db.collection('users').document(referrer).get()
+            
+            if not referrer_doc.exists:
+                logger.warning(f"Referrer {referrer} not found in Firebase")
+                return jsonify({'error': 'Referrer not found'}), 404
+            
+            referrer_data = referrer_doc.to_dict()
+            chat_id = referrer_data.get('chat_id')
+            friends_count = referrer_data.get('friends_invited', 0)
+            
+            if not chat_id:
+                logger.warning(f"No chat_id for referrer {referrer}")
+                return jsonify({'error': 'No chat_id'}), 404
+            
+            logger.info(f"Found chat_id {chat_id} for referrer {referrer}, friends: {friends_count}")
+            
+        except Exception as e:
+            logger.error(f"Firebase error: {e}")
+            return jsonify({'error': 'Database error'}), 500
         
-        if not referrer_doc.exists:
-            logger.warning(f"Referrer {referrer} not found in Firebase")
-            return jsonify({'error': 'Referrer not found'}), 404
-        
-        referrer_data = referrer_doc.to_dict()
-        chat_id = referrer_data.get('chat_id')
-        
-        if not chat_id:
-            logger.warning(f"No chat_id for referrer {referrer}")
-            return jsonify({'error': 'No chat_id'}), 404
-        
+        # Calculate reward based on milestone
+        reward = 1000  # Base reward
+        milestone_bonus = 0
+        milestone_name = ""
+
+        if friends_count == 5:
+            milestone_bonus = 5000
+            milestone_name = "🏅 Recruteur Badge unlocked!"
+        elif friends_count == 10:
+            milestone_bonus = 4500
+            milestone_name = "🎖️ Ambassadeur Badge unlocked!"
+        elif friends_count == 25:
+            milestone_bonus = 39500
+            milestone_name = "👑 Legend Badge unlocked!"
+        elif friends_count == 50:
+            milestone_bonus = 100000
+            milestone_name = "💎 Elite Badge unlocked!"
+
+        total_reward = reward + milestone_bonus
+
         # Create notification message
-        message = f"""
+        if milestone_bonus > 0:
+            message = f"""
 🎉 *Congratulations!*
 
 *{new_user}* just joined our community using your referral link!
 
-💰 You earned *1,000 NES* tokens!
+💰 You earned *{total_reward:,} NES* tokens!
+   • Base reward: {reward:,} NES
+   • Milestone bonus: {milestone_bonus:,} NES
+
+{milestone_name}
+
+Total friends invited: *{friends_count}*
+
+Keep sharing to unlock bigger rewards! 🚀
+"""
+        else:
+            message = f"""
+🎉 *Congratulations!*
+
+*{new_user}* just joined our community using your referral link!
+
+💰 You earned *{reward:,} NES* tokens!
+
+Total friends invited: *{friends_count}*
 
 Keep sharing to unlock bigger rewards! 🚀
 """
         
-        # Create keyboard
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
-            [InlineKeyboardButton("📢 Share Again", url=f"https://t.me/share/url?url=https://t.me/nestortonbot?start=ref_{referrer_data.get('referral_code', '')}")]
-        ])
-        
-        # Send notification
-        await bot.send_message(
-            chat_id=chat_id,
-            text=message,
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
-        
-        logger.info(f"Telegram notification sent to {referrer} (chat_id: {chat_id})")
-        return jsonify({'success': True})
-        
+        try:
+            # Create keyboard
+            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+            
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
+                [InlineKeyboardButton("📢 Share Again", 
+                    url=f"https://t.me/share/url?url=https://t.me/nestortonbot?start=ref_{referrer_data.get('referral_code', '')}")]
+            ])
+            
+            # Send notification
+            logger.info(f"Attempting to send Telegram message to chat_id {chat_id}")
+            
+            await bot.send_message(
+                chat_id=int(chat_id),
+                text=message,
+                parse_mode='Markdown',
+                reply_markup=keyboard
+            )
+            
+            logger.info(f"✅ Telegram notification sent successfully to {referrer}")
+            return jsonify({'success': True}), 200
+            
+        except Exception as e:
+            logger.error(f"Telegram API error: {e}")
+            return jsonify({'error': f'Telegram error: {str(e)}'}), 500
+            
     except Exception as e:
-        logger.error(f"Error in notify-referral endpoint: {e}")
+        logger.error(f"Unexpected error in notify-referral: {e}", exc_info=True)
         return jsonify({'error': str(e)}), 500
         
 
