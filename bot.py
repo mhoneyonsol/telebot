@@ -1065,7 +1065,6 @@ _Admin: Use /reward_top3 to reward the top players, or manually send rewards wit
 
 
 
-# 6️⃣ REWARD_TOP3 - Récompenser automatiquement le top 3
 async def reward_top3(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Commande /reward_top3 - Récompenser le top 3 du leaderboard"""
     if update.effective_user.username != ADMIN_USERNAME:
@@ -1082,7 +1081,7 @@ async def reward_top3(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         rewards = [10000, 5000, 2500]
         
-        message = "🏆 *Rewarding Top 3 Players...*\n\n"
+        message = "🏆 <b>Rewarding Top 3 Players...</b>\n\n"
         
         bot = Bot(token=API_TOKEN)
         
@@ -1103,23 +1102,24 @@ async def reward_top3(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id = user_doc.to_dict().get('chat_id')
                 if chat_id:
                     try:
-                        # ✅ Message sans parse_mode pour éviter les erreurs de parsing
                         user_message = f"🏆 Congratulations! You ranked #{i+1} and received {format_number(reward)} NES! 🎉"
                         await bot.send_message(
                             chat_id=chat_id, 
                             text=user_message
-                            # ✅ PAS de parse_mode
                         )
                         logger.info(f"Reward notification sent to {username}")
                     except Exception as e:
                         logger.error(f"Failed to notify {username}: {e}")
             
-            message += f"{i+1}. {username} - Sent {format_number(reward)} NES ✅\n"
+            # ✅ Échapper le username pour éviter les erreurs HTML
+            escaped_username = html.escape(username)
+            message += f"{i+1}. {escaped_username} - Sent {format_number(reward)} NES ✅\n"
         
         total = sum(rewards)
-        message += f"\nTotal distributed: {format_number(total)} NES"
+        message += f"\n<b>Total distributed:</b> {format_number(total)} NES"
         
-        await update.message.reply_text(message, parse_mode='Markdown')
+        # ✅ Utiliser HTML au lieu de Markdown
+        await update.message.reply_text(message, parse_mode='HTML')
         logger.info("Admin rewarded top 3 players")
         
     except Exception as e:
