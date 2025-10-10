@@ -74,11 +74,24 @@ from concurrent.futures import ThreadPoolExecutor
 # Initialize a ThreadPoolExecutor
 executor = ThreadPoolExecutor()
 
+
+# Helper function to get standardized username
+def get_standardized_username(user):
+    """Get username in the same format as main.js"""
+    if user.username:
+        return user.username
+    elif user.first_name and user.last_name:
+        return f"{user.first_name}_{user.last_name}"
+    elif user.first_name:
+        return user.first_name
+    else:
+        return "Unknown_User"
+
 # Handler for the /start command
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         user = update.effective_user
-        username = user.username or user.first_name or "Player"
+        username = get_standardized_username(user)
         chat_id = update.effective_chat.id
         user_id = user.id
 
@@ -215,7 +228,8 @@ Keep sharing to unlock more rewards! 🚀
 
 # Handler for the /leaderboard command
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    username = update.effective_user.username or update.effective_user.first_name
+
+    username = get_standardized_username(update.effective_user)
     user_rank = None
     leaderboard_text = ""
     
@@ -240,20 +254,22 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
             formatted_balance = format_number(balance)
             
             # Escape HTML entities
-            escaped_user = html.escape(user)
+            # ✅ NOUVEAU
+# Escape HTML entities
+escaped_user = html.escape(user)
 
-            # Highlight the user if they're viewing their rank
-            if user == username:
-                user_rank = rank
-                leaderboard_text += f"🌟 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | Lvl {level}\n"
-            elif rank == 1:
-                leaderboard_text += f"🥇 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | 🏅 Lvl {level}\n"
-            else:
-                leaderboard_text += f"{rank} - {escaped_user} | 💰 {formatted_balance} NES | Lvl {level}\n"
+# Highlight the user if they're viewing their rank
+if user == username:
+    user_rank = rank
+    leaderboard_text += f"🌟 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | Lvl {level}\n"
+elif rank == 1:
+    leaderboard_text += f"🥇 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | 🏅 Lvl {level}\n"
+else:
+    leaderboard_text += f"{rank} - {escaped_user} | 💰 {formatted_balance} NES | Lvl {level}\n"
 
         # Add user's rank at the top
         if user_rank:
-            rank_text = f"Your rank is: <b>#{user_rank}</b> 🎉\n\n"
+        rank_text = f"Your rank is: <b>#{user_rank}</b> 🎉\n\n"
         else:
             rank_text = "Your rank is: Not Available 😢\n\n"
 
@@ -298,8 +314,9 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Handler for the /profile command
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    username = update.effective_user.username or update.effective_user.first_name
-    try:
+
+        username = get_standardized_username(update.effective_user)
+         try:
         # Fetch user data from Firestore
         user_doc_ref = db.collection('users').document(username)
         user_doc = user_doc_ref.get()
@@ -362,7 +379,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     animation="https://i.imgur.com/NqniPEJ.gif",
                     caption=profile_message,
                     reply_markup=keyboard,
-                    parse_mode='Markdown'
+                    parse_mode='HTML'
                 )
             else:
                 await context.bot.send_animation(
@@ -370,7 +387,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     animation="https://i.imgur.com/NqniPEJ.gif",
                     caption=profile_message,
                     reply_markup=keyboard,
-                    parse_mode='Markdown'
+                    parse_mode='HTML'
                 )
         else:
             # User document does not exist
@@ -393,7 +410,7 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def referral_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handler for referral link button"""
-    username = update.effective_user.username or update.effective_user.first_name
+    username = get_standardized_username(update.effective_user)
     
     try:
         # Fetch user data from Firestore
