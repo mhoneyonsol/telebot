@@ -1,7 +1,7 @@
 """
 BOT TELEGRAM TOKEARN
 Bot pour gérer les interactions Telegram avec l'application Tokearn
-Fonctionnalités: Profile, Leaderboard, Referral system, Broadcast
+Fonctionnalités: Profile, Leaderboard, Referral system, Broadcast, Admin tools
 """
 
 from datetime import datetime
@@ -649,6 +649,345 @@ async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ========================================
+# ADMIN: ENVOYER MESSAGE À UN USER SPÉCIFIQUE
+# ========================================
+
+async def sendto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Commande /sendto - RÉSERVÉE À L'ADMIN
+    Envoie un message à un utilisateur spécifique
+    
+    Usage: /sendto username Votre message ici
+    Exemple: /sendto johndoe Hello! This is a test message from admin
+    """
+    
+    # Vérifier que l'utilisateur est bien l'admin
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    # Vérifier que la commande contient au moins 2 arguments (username + message)
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "❌ Usage: /sendto <username> <message>\n"
+            "Example: /sendto johndoe Hello from admin!"
+        )
+        return
+    
+    # Extraire le username cible (premier argument)
+    target_username = context.args[0]
+    
+    # Extraire le message (tous les arguments après le username)
+    message_text = ' '.join(context.args[1:])
+    
+    try:
+        # Récupérer les données de l'utilisateur cible depuis Firestore
+        user_doc_ref = db.collection('users').document(target_username)
+        user_doc = user_doc_ref.get()
+        
+        if not user_doc.exists:
+            await update.message.reply_text(
+                f"❌ User '{target_username}' not found in database.\n"
+                f"Make sure the username is correct and the user has used /start before."
+            )
+            return
+        
+        user_data = user_doc.to_dict()
+        chat_id = user_data.get('chat_id')
+        
+        if not chat_id:
+            await update.message.reply_text(
+                f"❌ No chat_id found for user '{target_username}'.\n"
+                f"The user may need to restart the bot with /start."
+            )
+            return
+        
+        # Créer le message avec un badge "Admin Message"
+        admin_message = f"""
+🔔 *Admin Message*
+
+{message_text}
+
+_This message was sent by the Tokearn team._
+"""
+        
+        # Optionnel: Ajouter des boutons d'action
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
+            [InlineKeyboardButton("💬 Contact Support", url="https://t.me/pxlonton")]
+        ])
+        
+        # Envoyer le message à l'utilisateur cible
+        bot = Bot(token=API_TOKEN)
+        await bot.send_message(
+            chat_id=chat_id,
+            text=admin_message,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        
+        # Confirmer à l'admin que le message a été envoyé
+        await update.message.reply_text(
+            f"✅ Message successfully sent to {target_username}!\n\n"
+            f"*Preview:*\n{message_text}",
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Admin message sent to {target_username}: {message_text}")
+        
+    except Exception as e:
+        logger.error(f"Error sending message to {target_username}: {e}")
+        await update.message.reply_text(
+            f"❌ Error sending message to {target_username}.\n"
+            f"Error: {str(e)}"
+        )
+
+
+# ========================================
+# ADMIN: ENVOYER MESSAGE AVEC GIF
+# ========================================
+
+async def sendto_gif(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Commande /sendto_gif - RÉSERVÉE À L'ADMIN
+    Envoie un message avec GIF à un utilisateur spécifique
+    
+    Usage: /sendto_gif username <gif_url> Votre message ici
+    Exemple: /sendto_gif johndoe https://i.imgur.com/example.gif Check this out!
+    """
+    
+    # Vérifier que l'utilisateur est bien l'admin
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    # Vérifier que la commande contient au moins 3 arguments (username + gif_url + message)
+    if not context.args or len(context.args) < 3:
+        await update.message.reply_text(
+            "❌ Usage: /sendto_gif <username> <gif_url> <message>\n"
+            "Example: /sendto_gif johndoe https://i.imgur.com/gdyscr0.gif Hello!"
+        )
+        return
+    
+    # Extraire les paramètres
+    target_username = context.args[0]
+    gif_url = context.args[1]
+    message_text = ' '.join(context.args[2:])
+    
+    try:
+        # Récupérer les données de l'utilisateur cible
+        user_doc_ref = db.collection('users').document(target_username)
+        user_doc = user_doc_ref.get()
+        
+        if not user_doc.exists:
+            await update.message.reply_text(f"❌ User '{target_username}' not found.")
+            return
+        
+        user_data = user_doc.to_dict()
+        chat_id = user_data.get('chat_id')
+        
+        if not chat_id:
+            await update.message.reply_text(f"❌ No chat_id found for '{target_username}'.")
+            return
+        
+        # Message avec badge admin
+        admin_message = f"""
+🔔 *Admin Message*
+
+{message_text}
+
+_This message was sent by the Tokearn team._
+"""
+        
+        # Boutons d'action
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
+            [InlineKeyboardButton("💬 Reply", url="https://t.me/pxlonton")]
+        ])
+        
+        # Envoyer avec GIF
+        bot = Bot(token=API_TOKEN)
+        await bot.send_animation(
+            chat_id=chat_id,
+            animation=gif_url,
+            caption=admin_message,
+            parse_mode='Markdown',
+            reply_markup=keyboard
+        )
+        
+        # Confirmer à l'admin
+        await update.message.reply_text(
+            f"✅ Message with GIF sent to {target_username}!\n\n"
+            f"*GIF:* {gif_url}\n"
+            f"*Message:* {message_text}",
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Admin GIF message sent to {target_username}")
+        
+    except Exception as e:
+        logger.error(f"Error sending GIF to {target_username}: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# ========================================
+# ADMIN: LISTER TOUS LES USERS
+# ========================================
+
+async def listusers(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Commande /listusers - RÉSERVÉE À L'ADMIN
+    Liste tous les utilisateurs enregistrés dans la base de données
+    Affiche: username, chat_id, user_id, token balance
+    """
+    
+    # Vérifier que l'utilisateur est bien l'admin
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    try:
+        # Récupérer tous les utilisateurs
+        users_ref = db.collection('users')
+        docs = users_ref.stream()
+        
+        user_list = []
+        total_users = 0
+        
+        for doc in docs:
+            total_users += 1
+            user_data = doc.to_dict()
+            username = doc.id
+            chat_id = user_data.get('chat_id', 'N/A')
+            user_id = user_data.get('user_id', 'N/A')
+            token_balance = user_data.get('token_balance', 0)
+            
+            # Formater la ligne pour cet utilisateur
+            user_list.append(
+                f"• {username}\n"
+                f"  ID: `{user_id}` | Chat: `{chat_id}`\n"
+                f"  Balance: {format_number(token_balance)} NES"
+            )
+        
+        # Diviser la liste si trop longue (limite Telegram: 4096 caractères)
+        message_header = f"👥 *Total Users: {total_users}*\n\n"
+        
+        if not user_list:
+            await update.message.reply_text("No users found in database.")
+            return
+        
+        # Envoyer par blocs de 20 utilisateurs pour éviter la limite de caractères
+        chunk_size = 20
+        for i in range(0, len(user_list), chunk_size):
+            chunk = user_list[i:i + chunk_size]
+            message = message_header if i == 0 else ""
+            message += "\n\n".join(chunk)
+            
+            await update.message.reply_text(message, parse_mode='Markdown')
+            
+            # Petit délai entre les messages pour éviter les rate limits
+            if i + chunk_size < len(user_list):
+                await asyncio.sleep(0.5)
+        
+        logger.info(f"Admin {update.effective_user.username} listed all users")
+        
+    except Exception as e:
+        logger.error(f"Error listing users: {e}")
+        await update.message.reply_text(f"❌ Error listing users: {str(e)}")
+
+
+# ========================================
+# ADMIN: OBTENIR INFO D'UN USER SPÉCIFIQUE
+# ========================================
+
+async def userinfo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Commande /userinfo - RÉSERVÉE À L'ADMIN
+    Affiche les informations détaillées d'un utilisateur
+    
+    Usage: /userinfo <username>
+    Exemple: /userinfo johndoe
+    """
+    
+    # Vérifier que l'utilisateur est bien l'admin
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    # Vérifier qu'un username est fourni
+    if not context.args or len(context.args) < 1:
+        await update.message.reply_text(
+            "❌ Usage: /userinfo <username>\n"
+            "Example: /userinfo johndoe"
+        )
+        return
+    
+    target_username = context.args[0]
+    
+    try:
+        # Récupérer les données de l'utilisateur
+        user_doc_ref = db.collection('users').document(target_username)
+        user_doc = user_doc_ref.get()
+        
+        if not user_doc.exists:
+            await update.message.reply_text(f"❌ User '{target_username}' not found.")
+            return
+        
+        user_data = user_doc.to_dict()
+        
+        # Extraire toutes les infos disponibles
+        chat_id = user_data.get('chat_id', 'N/A')
+        user_id = user_data.get('user_id', 'N/A')
+        token_balance = user_data.get('token_balance', 0)
+        level = user_data.get('level_notified', 1)
+        claimed_day = user_data.get('claimedDay', 'N/A')
+        time_on_app = user_data.get('time_on_app', 0)
+        wallet_address = user_data.get('wallet_address', 'Not Linked')
+        friends_invited = user_data.get('friends_invited', 0)
+        referral_code = user_data.get('referral_code', 'N/A')
+        
+        # Formater le temps sur l'app
+        if isinstance(time_on_app, int):
+            hours = time_on_app // 3600
+            minutes = (time_on_app % 3600) // 60
+            time_formatted = f"{hours}h {minutes}m"
+        else:
+            time_formatted = "N/A"
+        
+        # Construire le message d'info
+        info_message = f"""
+📊 *User Information: {target_username}*
+
+*Basic Info:*
+• User ID: `{user_id}`
+• Chat ID: `{chat_id}`
+• Level: `{level}`
+
+*Activity:*
+• Token Balance: `{format_number(token_balance)} NES`
+• Claimed Days: `{claimed_day}`
+• Time on App: `{time_formatted}`
+
+*Referral:*
+• Referral Code: `{referral_code}`
+• Friends Invited: `{friends_invited}`
+
+*Wallet:*
+• Address: `{wallet_address}`
+
+_Use /sendto {target_username} <message> to send them a message_
+"""
+        
+        await update.message.reply_text(info_message, parse_mode='Markdown')
+        
+        logger.info(f"Admin {update.effective_user.username} checked info for {target_username}")
+        
+    except Exception as e:
+        logger.error(f"Error getting user info for {target_username}: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# ========================================
 # GESTIONNAIRE DE CALLBACKS
 # ========================================
 
@@ -714,12 +1053,10 @@ async def post_init(application):
     """
     Configure les commandes du bot au démarrage
     Ces commandes apparaissent dans le menu Telegram (bouton "/" en bas à gauche)
+    Seule la commande /start est visible pour tous les utilisateurs
     """
     commands = [
         BotCommand("start", "Start the bot"),
-        # On peut ajouter d'autres commandes ici si nécessaire
-        # BotCommand("leaderboard", "View leaderboard"),
-        # BotCommand("profile", "View your profile"),
     ]
     
     await application.bot.set_my_commands(commands)
@@ -734,22 +1071,36 @@ def main():
     """
     Point d'entrée principal du bot
     - Initialise l'application
-    - Enregistre tous les handlers
-    - Lance le polling
+    - Enregistre tous les handlers (commandes, callbacks, paiements)
+    - Lance le polling pour écouter les messages
     """
     # Créer l'application avec le token et la fonction post_init
     application = ApplicationBuilder().token(API_TOKEN).post_init(post_init).build()
 
-    # Enregistrer les handlers de commandes
+    # ========================================
+    # HANDLERS DE COMMANDES PUBLIQUES
+    # ========================================
     application.add_handler(CommandHandler('start', start))
-    application.add_handler(CommandHandler('broadcast', broadcast))
     application.add_handler(CommandHandler('leaderboard', leaderboard))
     application.add_handler(CommandHandler('profile', profile))
     
-    # Enregistrer le handler pour les boutons inline
+    # ========================================
+    # HANDLERS DE COMMANDES ADMIN
+    # ========================================
+    application.add_handler(CommandHandler('broadcast', broadcast))
+    application.add_handler(CommandHandler('sendto', sendto))
+    application.add_handler(CommandHandler('sendto_gif', sendto_gif))
+    application.add_handler(CommandHandler('listusers', listusers))
+    application.add_handler(CommandHandler('userinfo', userinfo))
+    
+    # ========================================
+    # HANDLER POUR LES BOUTONS INLINE
+    # ========================================
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    # Enregistrer les handlers pour les paiements Telegram Stars
+    # ========================================
+    # HANDLERS POUR LES PAIEMENTS TELEGRAM STARS
+    # ========================================
     application.add_handler(PreCheckoutQueryHandler(pre_checkout_handler))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
