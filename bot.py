@@ -1187,7 +1187,7 @@ def main():
     application.add_handler(CommandHandler('sendto_gif', sendto_gif))
     application.add_handler(CommandHandler('listusers', listusers))
     application.add_handler(CommandHandler('userinfo', userinfo))
-     application.add_handler(CommandHandler('setup_admin_menu', setup_admin_menu)
+    application.add_handler(CommandHandler('setup_admin_menu', setup_admin_menu))
     
     # ========================================
     # HANDLER POUR LES BOUTONS INLINE
