@@ -1,6 +1,6 @@
 from datetime import datetime
 import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update, BotCommand
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update, BotCommand, MenuButtonWebApp, WebAppInfo
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 from dotenv import load_dotenv
 import firebase_admin
@@ -585,16 +585,29 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
         f"Merci pour votre achat premium 🌟"
     )
 
-# Fonction pour définir les commandes du bot
+# Fonction pour configurer le bouton menu personnalisé
 async def post_init(application):
-    """Configure les commandes du bot au démarrage"""
+    """Configure le bouton menu personnalisé au démarrage"""
+    
+    # Option 1: Bouton menu qui ouvre directement la WebApp
+    menu_button = MenuButtonWebApp(
+        text="🚀 Launch dApp",
+        web_app=WebAppInfo(url="https://t.me/nestortonbot/hello")
+    )
+    
+    try:
+        await application.bot.set_chat_menu_button(menu_button=menu_button)
+        logger.info("Custom menu button configured: Launch App")
+    except Exception as e:
+        logger.error(f"Error setting menu button: {e}")
+    
+    # Définir aussi les commandes (optionnel, pour le menu classique)
     commands = [
         BotCommand("start", "Start the bot"),
     ]
     
     await application.bot.set_my_commands(commands)
     logger.info("Bot commands configured successfully")
-
 
 # Main function to set up the bot
 def main():
