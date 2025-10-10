@@ -1,3 +1,9 @@
+"""
+BOT TELEGRAM TOKEARN
+Bot pour gérer les interactions Telegram avec l'application Tokearn
+Fonctionnalités: Profile, Leaderboard, Referral system, Broadcast
+"""
+
 from datetime import datetime
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update, BotCommand
@@ -6,17 +12,24 @@ from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
-import html
+import html  # Pour échapper les caractères HTML dans les usernames
 import json
 from telegram.ext import PreCheckoutQueryHandler, MessageHandler, filters
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 
-# Load environment variables from .env file
+# ========================================
+# CONFIGURATION ET INITIALISATION
+# ========================================
+
+# Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
 
+# Récupérer les tokens et identifiants depuis les variables d'environnement
 API_TOKEN = os.getenv("API_TOKEN")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 
-# Firebase configuration using environment variables from .env file
+# Configuration Firebase depuis les variables d'environnement
 firebase_config = {
     "type": os.getenv("FIREBASE_TYPE"),
     "project_id": os.getenv("FIREBASE_PROJECT_ID"),
@@ -31,33 +44,47 @@ firebase_config = {
     "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN")
 }
 
-# Initialize Firebase with the loaded configuration
+# Initialiser Firebase avec les credentials
 cred = credentials.Certificate(json.loads(json.dumps(firebase_config)))
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# Set up logging
+# Configuration du système de logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Helper function to format numbers in compact form
+# Initialiser un ThreadPoolExecutor pour les opérations Firestore asynchrones
+executor = ThreadPoolExecutor()
+
+
+# ========================================
+# FONCTIONS UTILITAIRES
+# ========================================
+
 def format_number(num):
-    if num >= 1_000_000:  # For 1 million and above
+    """
+    Formate un nombre en version compacte (K pour milliers, M pour millions)
+    Ex: 1500 -> 1k, 1500000 -> 1M
+    """
+    if num >= 1_000_000:  # Pour 1 million et plus
         return f"{num // 1_000_000}M"
-    elif num >= 1_000:  # For 1 thousand and above
+    elif num >= 1_000:  # Pour 1 millier et plus
         return f"{num // 1_000}k"
-    return str(num)  # For less than 1 thousand, return as-is
+    return str(num)  # Moins de 1 millier, retourner tel quel
 
 
-# Function to convert a timestamp to a readable format
 def convert_timestamp_to_readable(timestamp):
+    """
+    Convertit un timestamp en format lisible
+    Ex: 1699564800000 -> "09-11-23, 14:20"
+    """
     try:
-        if isinstance(timestamp, int):  # Assume it's in milliseconds
+        if isinstance(timestamp, int):  # Si c'est en millisecondes
             timestamp_seconds = timestamp // 1000
-            # Format as `dd-mm-yy, HH:MM`
+            # Format: jour-mois-année, heure:minute
             return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d-%m-%y, %H:%M')
         else:
             return "Not Available"
@@ -66,18 +93,17 @@ def convert_timestamp_to_readable(timestamp):
         return "Not Available"
 
 
-
-# Handler for the /start command
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-
-# Initialize a ThreadPoolExecutor
-executor = ThreadPoolExecutor()
-
-
-# Helper function to get standardized username
 def get_standardized_username(user):
-    """Get username in the same format as main.js"""
+    """
+    Obtient le username de manière standardisée, identique à main.js
+    Ceci garantit la cohérence entre le bot et l'application web
+    
+    Priorité:
+    1. Username Telegram (@username)
+    2. Prénom + Nom (First_Last)
+    3. Prénom seul (First)
+    4. "Unknown_User" en dernier recours
+    """
     if user.username:
         return user.username
     elif user.first_name and user.last_name:
@@ -87,15 +113,26 @@ def get_standardized_username(user):
     else:
         return "Unknown_User"
 
-# Handler for the /start command
+
+# ========================================
+# HANDLER: /start
+# ========================================
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Gère la commande /start du bot
+    - Enregistre l'utilisateur dans Firebase
+    - Gère les codes de référence (referral)
+    - Affiche le message de bienvenue avec les boutons
+    """
     try:
         user = update.effective_user
-        username = get_standardized_username(user)
+        username = get_standardized_username(user)  # Standardiser le username
         chat_id = update.effective_chat.id
         user_id = user.id
 
-        # Extraire le code de référence
+        # Vérifier si un code de référence est présent dans la commande
+        # Format: /start ref_ABC123
         referral_code = None
         if context.args and len(context.args) > 0:
             arg = context.args[0]
@@ -105,25 +142,28 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logger.info(f"User '{username}' with ID '{user_id}' started the bot.")
 
-        # Save user data in Firestore
+        # Sauvegarder/Mettre à jour les données utilisateur dans Firestore
         user_doc_ref = db.collection('users').document(username)
         loop = asyncio.get_event_loop()
         user_doc = await loop.run_in_executor(executor, user_doc_ref.get)
 
+        # Données à sauvegarder
         user_data = {
             "chat_id": chat_id,
             "user_id": user_id
         }
         
+        # Ajouter le code de référence en attente si présent
         if referral_code:
             user_data["pending_referral_code"] = referral_code
 
+        # Mise à jour ou création du document utilisateur
         if user_doc.exists:
             await loop.run_in_executor(executor, user_doc_ref.update, user_data)
         else:
             await loop.run_in_executor(executor, user_doc_ref.set, user_data)
 
-        # 🆕 SI CODE DE RÉFÉRENCE → OUVRIR LA WEBAPP DIRECTEMENT
+        # Si code de référence présent, rediriger directement vers l'app
         if referral_code:
             webapp_url = f'https://t.me/nestortonbot/hello?startapp=ref_{referral_code}'
             
@@ -140,7 +180,7 @@ Click below to start earning NES tokens right away! 👇
             await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
             return
 
-        # Message normal pour les utilisateurs sans code de référence
+        # Message de bienvenue standard pour les utilisateurs sans référence
         welcome_message = f"""
 🚀 *Welcome, {username}!* 
 
@@ -155,12 +195,13 @@ Step into *Tokearn*, where the excitement of gaming meets the power of the TON b
 Ready to join the battle for NES? Start farming, trading, and earning on TON today with Nestor LABS!
 """
 
+        # Clavier inline avec tous les boutons d'actions
         keyboard = [
             [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/hello')],
             [InlineKeyboardButton("👾 Stardust", url='https://t.me/nestortonbot/Stardust')],
             [InlineKeyboardButton("👾 Runner", url='https://t.me/nestortonbot/Runner')],
             [InlineKeyboardButton("👤 Profile", callback_data='profile')],
-            [InlineKeyboardButton("📢 Get My Referral Link", callback_data='referral')],  # ✅ NOUVEAU
+            [InlineKeyboardButton("📢 Get My Referral Link", callback_data='referral')],
             [InlineKeyboardButton("🗯️ Channel", url='https://t.me/pxlonton')],
             [InlineKeyboardButton("🎁 Rewards", url='https://t.me/pxltonbot/home#rewards')],
             [InlineKeyboardButton("🏆 Leaderboard", callback_data='leaderboard')],
@@ -175,11 +216,17 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
         await update.message.reply_text("An error occurred. Please try again later.")
 
 
+# ========================================
+# SYSTÈME DE RÉFÉRENCE (REFERRAL)
+# ========================================
 
 async def send_referral_notification(referrer_username, new_user_username):
-    """Send Telegram notification when someone joins via referral"""
+    """
+    Envoie une notification Telegram quand quelqu'un rejoint via un lien de référence
+    Appelée depuis l'API Flask (api.py)
+    """
     try:
-        # Get referrer's chat_id
+        # Récupérer le chat_id du parrain (referrer)
         referrer_doc = db.collection('users').document(referrer_username).get()
         
         if not referrer_doc.exists:
@@ -193,7 +240,7 @@ async def send_referral_notification(referrer_username, new_user_username):
             logger.warning(f"No chat_id for {referrer_username}")
             return
         
-        # Create notification message
+        # Message de notification
         message = f"""
 🎉 *Great News!*
 
@@ -204,13 +251,13 @@ async def send_referral_notification(referrer_username, new_user_username):
 Keep sharing to unlock more rewards! 🚀
 """
         
-        # Create keyboard with action button
+        # Boutons d'action
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
             [InlineKeyboardButton("📢 Share Again", url="https://t.me/share/url?url=https://t.me/nestortonbot")]
         ])
         
-        # Send notification
+        # Envoyer la notification
         bot = Bot(token=API_TOKEN)
         await bot.send_message(
             chat_id=chat_id,
@@ -225,200 +272,20 @@ Keep sharing to unlock more rewards! 🚀
         logger.error(f"Error sending referral notification: {e}")
 
 
-
-# Handler for the /leaderboard command
-async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    username = get_standardized_username(update.effective_user)
-    user_rank = None
-    leaderboard_text = ""
-    
-    header = "✨ <b>Top Players</b> ✨\n\n"
-
-    try:
-        # Fetch leaderboard data from Firestore
-        leaderboard_ref = db.collection('mainleaderboard')
-        leaderboard_docs = leaderboard_ref.stream()
-
-        # Sort documents based on their document ID
-        sorted_docs = sorted(leaderboard_docs, key=lambda d: int(d.id))
-
-        # Build the leaderboard message
-        for doc in sorted_docs:
-            rank = int(doc.id)
-            data = doc.to_dict()
-            user = data.get("username")
-            balance = data.get("token_balance", 0)
-            level = data.get("level", 1)
-
-            formatted_balance = format_number(balance)
-            
-            # Escape HTML entities
-            # ✅ NOUVEAU
-# Escape HTML entities
-escaped_user = html.escape(user)
-
-# Highlight the user if they're viewing their rank
-if user == username:
-    user_rank = rank
-    leaderboard_text += f"🌟 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | Lvl {level}\n"
-elif rank == 1:
-    leaderboard_text += f"🥇 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | 🏅 Lvl {level}\n"
-else:
-    leaderboard_text += f"{rank} - {escaped_user} | 💰 {formatted_balance} NES | Lvl {level}\n"
-
-        # Add user's rank at the top
-        if user_rank:
-        rank_text = f"Your rank is: <b>#{user_rank}</b> 🎉\n\n"
-        else:
-            rank_text = "Your rank is: Not Available 😢\n\n"
-
-        # Footer
-        footer = "\n🎮 <b>Keep playing to climb the leaderboard!</b>"
-
-        # Keyboard
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🏆 View Profile", callback_data='profile')],
-            [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
-        ])
-
-        if update.callback_query:
-            await update.callback_query.answer()
-            await context.bot.send_animation(
-                chat_id=update.effective_chat.id,
-                animation="https://i.imgur.com/gdyscr0.gif",
-                caption=header + rank_text + leaderboard_text + footer,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
-        else:
-            await context.bot.send_animation(
-                chat_id=update.effective_chat.id,
-                animation="https://i.imgur.com/gdyscr0.gif",
-                caption=header + rank_text + leaderboard_text + footer,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
-
-    except Exception as e:
-        logger.error(f"Error fetching leaderboard: {e}")
-        error_message = "An error occurred while fetching the leaderboard. Please try again later."
-        
-        if update.callback_query:
-            await update.callback_query.answer()
-            await update.callback_query.message.reply_text(error_message)
-        else:
-            await update.message.reply_text(error_message)
-
-
-
-# Handler for the /profile command
-async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-        username = get_standardized_username(update.effective_user)
-         try:
-        # Fetch user data from Firestore
-        user_doc_ref = db.collection('users').document(username)
-        user_doc = user_doc_ref.get()
-
-        if user_doc.exists:
-            user_data = user_doc.to_dict()
-            # Extract relevant user information
-            claimed_day = user_data.get('claimedDay', 'Not Available')
-            last_claim_timestamp = user_data.get('lastClaimTimestamp', 'Not Available')
-            last_session_time = user_data.get('last_session_time', 'Not Available')
-            level = user_data.get('level_notified', 'Not Available')
-            time_on_app = user_data.get('time_on_app', 'Not Available')
-            token_balance = user_data.get('token_balance', 0)
-            tons_balance = user_data.get('tons_balance', '0')
-            wallet_address = user_data.get('wallet_address', 'Not Linked')
-
-            # Convert timestamps to readable format
-            last_claim = convert_timestamp_to_readable(last_claim_timestamp)
-
-            # Convert time on app to hours and minutes
-            if isinstance(time_on_app, int):
-                hours = time_on_app // 3600
-                minutes = (time_on_app % 3600) // 60
-                time_on_app_formatted = f"{hours}h {minutes}m"
-            else:
-                time_on_app_formatted = "Not Available"
-
-            # Format the token and TON balances
-            formatted_token_balance = format_number(token_balance)
-            formatted_ton_balance = f"{tons_balance} TON"
-
-            # Build the profile message
-            profile_message = f"""
-👤 *Profile Information*
-
-📛 *Username*: `{username}`
-📅 *Claimed Days*: `{claimed_day}`
-🕒 *Last Claim*: `{last_claim}`
-📱 *Last Session*: `{last_session_time}`
-🎮 *Level*: `{level}`
-⏱️ *Time on App*: `{time_on_app_formatted}`
-💰 *Token Balance*: `{formatted_token_balance} NES`
-🔹 *TON Balance*: `{formatted_ton_balance}`
-💼 *Wallet Address*: `{wallet_address}`
-
-🌟 Every step counts – keep progressing !
-            """
-
-            # Inline keyboard for additional actions
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🏆 View Leaderboard", callback_data='leaderboard')],
-                [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
-            ])
-
-            # Respond with the profile information including the GIF
-            if update.callback_query:
-                await update.callback_query.answer()
-                await context.bot.send_animation(
-                    chat_id=update.effective_chat.id,
-                    animation="https://i.imgur.com/NqniPEJ.gif",
-                    caption=profile_message,
-                    reply_markup=keyboard,
-                    parse_mode='HTML'
-                )
-            else:
-                await context.bot.send_animation(
-                    chat_id=update.effective_chat.id,
-                    animation="https://i.imgur.com/NqniPEJ.gif",
-                    caption=profile_message,
-                    reply_markup=keyboard,
-                    parse_mode='HTML'
-                )
-        else:
-            # User document does not exist
-            error_message = "❌ No profile information found. Please start using the app to generate your profile!"
-            if update.callback_query:
-                await update.callback_query.edit_message_text(error_message)
-                await update.callback_query.answer()
-            else:
-                await update.message.reply_text(error_message)
-
-    except Exception as e:
-        logger.error(f"Error fetching profile for {username}: {e}")
-        error_message = "An error occurred while fetching your profile. Please try again later."
-        if update.callback_query:
-            await update.callback_query.edit_message_text(error_message)
-            await update.callback_query.answer()
-        else:
-            await update.message.reply_text(error_message)
-
-
 async def referral_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handler for referral link button"""
+    """
+    Handler pour le bouton "Get My Referral Link"
+    Affiche le lien de parrainage de l'utilisateur et ses statistiques
+    """
     username = get_standardized_username(update.effective_user)
     
     try:
-        # Fetch user data from Firestore
+        # Récupérer les données utilisateur depuis Firestore
         user_doc_ref = db.collection('users').document(username)
         user_doc = user_doc_ref.get()
         
+        # Si l'utilisateur n'a pas encore lancé l'app
         if not user_doc.exists:
-            # User hasn't launched app yet
             message = """
 ❌ *Launch the app first!*
 
@@ -441,8 +308,8 @@ Click below to launch the app:
         user_data = user_doc.to_dict()
         referral_code = user_data.get('referral_code')
         
+        # Si le code de référence n'existe pas encore
         if not referral_code:
-            # No referral code yet
             message = """
 ❌ *Referral code not found!*
 
@@ -460,13 +327,14 @@ Please open the app to generate your referral code, then try again.
             )
             return
         
-        # Generate referral link
+        # Générer le lien de parrainage
         referral_link = f"https://t.me/nestortonbot?start=ref_{referral_code}"
         
-        # Get stats
+        # Récupérer les statistiques de parrainage
         friends_invited = user_data.get('friends_invited', 0)
         tokens_earned = user_data.get('referral_tokens_earned', 0)
         
+        # Message avec le lien et les stats
         message = f"""
 🎉 *Your Referral Link*
 
@@ -488,6 +356,7 @@ Share this link to invite friends and earn rewards!
 Start sharing now! 🚀
 """
         
+        # Boutons pour partager et ouvrir l'app
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("📤 Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join me on Tokearn! Earn NES tokens by playing games!")],
             [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")]
@@ -507,13 +376,228 @@ Start sharing now! 🚀
         await update.callback_query.answer("An error occurred. Please try again.")
 
 
+# ========================================
+# HANDLER: LEADERBOARD
+# ========================================
 
-# Function to send a message to all users
+async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Affiche le classement des meilleurs joueurs
+    - Récupère les données depuis la collection 'mainleaderboard'
+    - Trie par rang (document ID)
+    - Highlight le rang de l'utilisateur courant
+    - Utilise HTML pour éviter les problèmes de parsing avec les usernames
+    """
+    username = get_standardized_username(update.effective_user)
+    user_rank = None
+    leaderboard_text = ""
+    
+    header = "✨ <b>Top Players</b> ✨\n\n"
+
+    try:
+        # Récupérer les données du leaderboard depuis Firestore
+        leaderboard_ref = db.collection('mainleaderboard')
+        leaderboard_docs = leaderboard_ref.stream()
+
+        # Trier les documents par leur ID (qui correspond au rang)
+        sorted_docs = sorted(leaderboard_docs, key=lambda d: int(d.id))
+
+        # Construire le message du leaderboard
+        for doc in sorted_docs:
+            rank = int(doc.id)  # L'ID du document = rang
+            data = doc.to_dict()
+            user = data.get("username")
+            balance = data.get("token_balance", 0)
+            level = data.get("level", 1)
+
+            # Formater le solde en version compacte (K/M)
+            formatted_balance = format_number(balance)
+            
+            # Échapper les caractères HTML spéciaux dans le username
+            # IMPORTANT: évite les erreurs de parsing
+            escaped_user = html.escape(user)
+
+            # Mettre en évidence l'utilisateur actuel
+            if user == username:
+                user_rank = rank
+                leaderboard_text += f"🌟 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | Lvl {level}\n"
+            elif rank == 1:
+                # Mettre en évidence le premier rang
+                leaderboard_text += f"🥇 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | 🏅 Lvl {level}\n"
+            else:
+                leaderboard_text += f"{rank} - {escaped_user} | 💰 {formatted_balance} NES | Lvl {level}\n"
+
+        # Ajouter le rang de l'utilisateur en haut
+        if user_rank:
+            rank_text = f"Your rank is: <b>#{user_rank}</b> 🎉\n\n"
+        else:
+            rank_text = "Your rank is: Not Available 😢\n\n"
+
+        # Footer avec appel à l'action
+        footer = "\n🎮 <b>Keep playing to climb the leaderboard!</b>"
+
+        # Boutons d'action
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🏆 View Profile", callback_data='profile')],
+            [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
+        ])
+
+        # Envoyer le message avec GIF
+        if update.callback_query:
+            # Si appelé via un bouton callback
+            await update.callback_query.answer()
+            await context.bot.send_animation(
+                chat_id=update.effective_chat.id,
+                animation="https://i.imgur.com/gdyscr0.gif",
+                caption=header + rank_text + leaderboard_text + footer,
+                reply_markup=keyboard,
+                parse_mode="HTML"  # Utiliser HTML au lieu de Markdown pour plus de stabilité
+            )
+        else:
+            # Si appelé via la commande /leaderboard
+            await context.bot.send_animation(
+                chat_id=update.effective_chat.id,
+                animation="https://i.imgur.com/gdyscr0.gif",
+                caption=header + rank_text + leaderboard_text + footer,
+                reply_markup=keyboard,
+                parse_mode="HTML"
+            )
+
+    except Exception as e:
+        logger.error(f"Error fetching leaderboard: {e}")
+        error_message = "An error occurred while fetching the leaderboard. Please try again later."
+        
+        if update.callback_query:
+            await update.callback_query.answer()
+            await update.callback_query.message.reply_text(error_message)
+        else:
+            await update.message.reply_text(error_message)
+
+
+# ========================================
+# HANDLER: PROFILE
+# ========================================
+
+async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Affiche le profil de l'utilisateur avec ses statistiques
+    - Token balance
+    - Level
+    - Jours de connexion
+    - Temps passé sur l'app
+    - Wallet address
+    """
+    username = get_standardized_username(update.effective_user)
+    
+    try:
+        # Récupérer les données utilisateur depuis Firestore
+        user_doc_ref = db.collection('users').document(username)
+        user_doc = user_doc_ref.get()
+
+        if user_doc.exists:
+            user_data = user_doc.to_dict()
+            
+            # Extraire les informations pertinentes
+            claimed_day = user_data.get('claimedDay', 'Not Available')
+            last_claim_timestamp = user_data.get('lastClaimTimestamp', 'Not Available')
+            last_session_time = user_data.get('last_session_time', 'Not Available')
+            level = user_data.get('level_notified', 'Not Available')
+            time_on_app = user_data.get('time_on_app', 'Not Available')
+            token_balance = user_data.get('token_balance', 0)
+            tons_balance = user_data.get('tons_balance', '0')
+            wallet_address = user_data.get('wallet_address', 'Not Linked')
+
+            # Convertir les timestamps en format lisible
+            last_claim = convert_timestamp_to_readable(last_claim_timestamp)
+
+            # Convertir le temps sur l'app en heures et minutes
+            if isinstance(time_on_app, int):
+                hours = time_on_app // 3600
+                minutes = (time_on_app % 3600) // 60
+                time_on_app_formatted = f"{hours}h {minutes}m"
+            else:
+                time_on_app_formatted = "Not Available"
+
+            # Formater les soldes
+            formatted_token_balance = format_number(token_balance)
+            formatted_ton_balance = f"{tons_balance} TON"
+
+            # Construire le message du profil
+            profile_message = f"""
+👤 *Profile Information*
+
+📛 *Username*: `{username}`
+📅 *Claimed Days*: `{claimed_day}`
+🕒 *Last Claim*: `{last_claim}`
+📱 *Last Session*: `{last_session_time}`
+🎮 *Level*: `{level}`
+⏱️ *Time on App*: `{time_on_app_formatted}`
+💰 *Token Balance*: `{formatted_token_balance} NES`
+🔹 *TON Balance*: `{formatted_ton_balance}`
+💼 *Wallet Address*: `{wallet_address}`
+
+🌟 Every step counts – keep progressing !
+            """
+
+            # Boutons d'action
+            keyboard = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🏆 View Leaderboard", callback_data='leaderboard')],
+                [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
+            ])
+
+            # Envoyer le profil avec GIF
+            if update.callback_query:
+                # Si appelé via un bouton callback
+                await update.callback_query.answer()
+                await context.bot.send_animation(
+                    chat_id=update.effective_chat.id,
+                    animation="https://i.imgur.com/NqniPEJ.gif",
+                    caption=profile_message,
+                    reply_markup=keyboard,
+                    parse_mode='Markdown'
+                )
+            else:
+                # Si appelé via la commande /profile
+                await context.bot.send_animation(
+                    chat_id=update.effective_chat.id,
+                    animation="https://i.imgur.com/NqniPEJ.gif",
+                    caption=profile_message,
+                    reply_markup=keyboard,
+                    parse_mode='Markdown'
+                )
+        else:
+            # Document utilisateur inexistant
+            error_message = "❌ No profile information found. Please start using the app to generate your profile!"
+            if update.callback_query:
+                await update.callback_query.edit_message_text(error_message)
+                await update.callback_query.answer()
+            else:
+                await update.message.reply_text(error_message)
+
+    except Exception as e:
+        logger.error(f"Error fetching profile for {username}: {e}")
+        error_message = "An error occurred while fetching your profile. Please try again later."
+        if update.callback_query:
+            await update.callback_query.edit_message_text(error_message)
+            await update.callback_query.answer()
+        else:
+            await update.message.reply_text(error_message)
+
+
+# ========================================
+# SYSTÈME DE BROADCAST (ADMIN UNIQUEMENT)
+# ========================================
+
 async def send_update_to_all_users():
+    """
+    Envoie un message à tous les utilisateurs enregistrés
+    Utilisé pour les annonces importantes (nouveaux jeux, mises à jour, etc.)
+    """
     bot = Bot(token=API_TOKEN)
     users_ref = db.collection('users')
     docs = users_ref.stream()
 
+    # Message à broadcaster (à personnaliser selon les besoins)
     update_message = """🎮 *New Game Alert!* 
 
 🚀 We're excited to announce our brand new Unity game is now available for testing!
@@ -524,15 +608,16 @@ async def send_update_to_all_users():
 
 Your feedback will help us make the game even better! 🌟"""
 
-    # URL to an exciting gaming/launch related gif
+    # GIF pour rendre le message plus attractif
     gif_url = 'https://i.imgur.com/ScFz9BY.gif'
 
-    # Inline keyboard with buttons to launch the game and view profile
+    # Boutons d'action
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🎮 Play Runner", url='https://t.me/nestortonbot/Runner')],
         [InlineKeyboardButton("👤 View Profile", callback_data='profile')]
     ])
 
+    # Envoyer à tous les utilisateurs
     for doc in docs:
         user_data = doc.to_dict()
         chat_id = user_data.get("chat_id")
@@ -546,14 +631,18 @@ Your feedback will help us make the game even better! 🌟"""
                     reply_markup=keyboard
                 )
                 logger.info(f"New game announcement sent to chat_id {chat_id}")
-                # Add a small delay to avoid hitting rate limits
+                # Délai pour éviter les limites de taux de Telegram
                 await asyncio.sleep(0.1)
             except Exception as e:
                 logger.error(f"Failed to send game announcement to chat_id {chat_id}: {e}")
 
 
-# Command to broadcast message to all users, restricted to admin
 async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Commande /broadcast - RÉSERVÉE À L'ADMIN
+    Envoie un message à tous les utilisateurs
+    """
+    # Vérifier que l'utilisateur est bien l'admin
     if update.effective_user.username == ADMIN_USERNAME:
         await send_update_to_all_users()
         await update.message.reply_text("Update sent to all users.")
@@ -561,23 +650,36 @@ async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("You don't have permission to use this command.")
 
 
+# ========================================
+# GESTIONNAIRE DE CALLBACKS
+# ========================================
 
-
-# Handler for the button callback
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Gère tous les callback_data des boutons inline
+    - 'leaderboard' -> affiche le classement
+    - 'profile' -> affiche le profil
+    - 'referral' -> affiche le lien de parrainage
+    """
     query = update.callback_query
+    
     if query.data == 'leaderboard':
         await leaderboard(update, context)
     elif query.data == 'profile':
         await profile(update, context)
-    elif query.data == 'referral':  # ✅ NOUVEAU
+    elif query.data == 'referral':
         await referral_link(update, context)
 
 
+# ========================================
+# SYSTÈME DE PAIEMENT TELEGRAM STARS
+# ========================================
 
-# Gestionnaire pour les pre-checkout queries (obligatoire)
 async def pre_checkout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestionnaire pour les requêtes de pre-checkout"""
+    """
+    Gestionnaire pour les requêtes de pre-checkout (avant paiement)
+    Vérifie que le payload est valide avant d'accepter le paiement
+    """
     query = update.pre_checkout_query
     
     # Vérifier la validité du payload
@@ -588,9 +690,12 @@ async def pre_checkout_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await query.answer(ok=False, error_message="Invalid payment payload")
         logger.warning(f"Pre-checkout rejected for {query.from_user.username}")
 
-# Gestionnaire pour les paiements réussis
+
 async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Gestionnaire pour les paiements réussis"""
+    """
+    Gestionnaire pour les paiements réussis
+    Appelé automatiquement après un paiement Telegram Stars confirmé
+    """
     payment = update.message.successful_payment
     user = update.effective_user
     
@@ -602,34 +707,62 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
         f"Merci pour votre achat premium 🌟"
     )
 
-# Fonction pour définir les commandes du bot
+
+# ========================================
+# CONFIGURATION DU MENU BOT
+# ========================================
+
 async def post_init(application):
-    """Configure les commandes du bot au démarrage"""
+    """
+    Configure les commandes du bot au démarrage
+    Ces commandes apparaissent dans le menu Telegram (bouton "/" en bas à gauche)
+    """
     commands = [
         BotCommand("start", "Start the bot"),
+        # On peut ajouter d'autres commandes ici si nécessaire
+        # BotCommand("leaderboard", "View leaderboard"),
+        # BotCommand("profile", "View your profile"),
     ]
     
     await application.bot.set_my_commands(commands)
     logger.info("Bot commands configured successfully")
 
 
-# Main function to set up the bot
+# ========================================
+# FONCTION PRINCIPALE
+# ========================================
+
 def main():
+    """
+    Point d'entrée principal du bot
+    - Initialise l'application
+    - Enregistre tous les handlers
+    - Lance le polling
+    """
+    # Créer l'application avec le token et la fonction post_init
     application = ApplicationBuilder().token(API_TOKEN).post_init(post_init).build()
 
-    # Add command handlers
+    # Enregistrer les handlers de commandes
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('broadcast', broadcast))
     application.add_handler(CommandHandler('leaderboard', leaderboard))
     application.add_handler(CommandHandler('profile', profile))
+    
+    # Enregistrer le handler pour les boutons inline
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    # Payment handlers
+    # Enregistrer les handlers pour les paiements Telegram Stars
     application.add_handler(PreCheckoutQueryHandler(pre_checkout_handler))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
-    # Start polling for updates
+    # Démarrer le bot en mode polling (écoute continue des messages)
+    logger.info("Bot started and listening for updates...")
     application.run_polling()
+
+
+# ========================================
+# POINT D'ENTRÉE
+# ========================================
 
 if __name__ == '__main__':
     main()
