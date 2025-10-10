@@ -782,35 +782,69 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 top_holder = {"username": user_doc.id, "balance": balance}
             
             last_session = user_data.get('last_session_time')
+            
             if last_session:
                 try:
+                    last_session_date = None
+                    
+                    # Cas 1: Timestamp en millisecondes (int)
                     if isinstance(last_session, int):
-                        last_session_date = datetime.utcfromtimestamp(last_session / 1000)
-                        if (now - last_session_date).days < 1:
+                        # Vérifier si c'est en millisecondes ou secondes
+                        if last_session > 10000000000:  # Plus grand = millisecondes
+                            last_session_date = datetime.utcfromtimestamp(last_session / 1000)
+                        else:  # Sinon c'est en secondes
+                            last_session_date = datetime.utcfromtimestamp(last_session)
+                    
+                    # Cas 2: String timestamp
+                    elif isinstance(last_session, str):
+                        try:
+                            timestamp_int = int(last_session)
+                            if timestamp_int > 10000000000:
+                                last_session_date = datetime.utcfromtimestamp(timestamp_int / 1000)
+                            else:
+                                last_session_date = datetime.utcfromtimestamp(timestamp_int)
+                        except ValueError:
+                            # Peut-être un format ISO ou autre
+                            logger.warning(f"Unknown date format for {user_doc.id}: {last_session}")
+                    
+                    # Cas 3: Firestore Timestamp
+                    elif hasattr(last_session, 'timestamp'):
+                        last_session_date = datetime.utcfromtimestamp(last_session.timestamp())
+                    
+                    # Calculer si actif/inactif
+                    if last_session_date:
+                        days_diff = (now - last_session_date).days
+                        
+                        if days_diff < 1:
                             active_24h += 1
-                        if (now - last_session_date).days >= 7:
+                        if days_diff >= 7:
                             inactive_7d += 1
-                except:
-                    pass
+                
+                except Exception as e:
+                    logger.error(f"Error parsing date for {user_doc.id}: {e} | Value: {last_session}")
         
         avg_balance = total_balance / total_users if total_users > 0 else 0
         
+        # ✅ Échapper le username du top holder
+        escaped_top_holder = html.escape(top_holder["username"])
+        
         stats_message = f"""
-📊 *Bot Statistics*
+📊 <b>Bot Statistics</b>
 
-👥 *Users:* {total_users} total
+👥 <b>Users:</b> {total_users} total
   ├─ Active (24h): {active_24h}
   └─ Inactive (7d): {inactive_7d}
 
-💰 *Economy:*
+💰 <b>Economy:</b>
   ├─ Total NES: {format_number(total_balance)}
   ├─ Avg balance: {format_number(int(avg_balance))} NES
-  └─ Top holder: {top_holder["username"]} ({format_number(top_holder["balance"])})
+  └─ Top holder: {escaped_top_holder} ({format_number(top_holder["balance"])})
 
-📅 *Generated:* {now.strftime('%Y-%m-%d %H:%M')} UTC
+📅 <b>Generated:</b> {now.strftime('%Y-%m-%d %H:%M')} UTC
 """
         
-        await update.message.reply_text(stats_message, parse_mode='Markdown')
+        # ✅ Utiliser HTML
+        await update.message.reply_text(stats_message, parse_mode='HTML')
         logger.info("Admin viewed stats")
         
     except Exception as e:
