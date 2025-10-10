@@ -645,13 +645,16 @@ async def listusers(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_id = user_data.get('user_id', 'N/A')
             token_balance = user_data.get('token_balance', 0)
             
+            # ✅ Échapper les caractères HTML pour éviter les erreurs
+            escaped_username = html.escape(str(username))
+            
             user_list.append(
-                f"• {username}\n"
-                f"  ID: `{user_id}` | Chat: `{chat_id}`\n"
+                f"• {escaped_username}\n"
+                f"  ID: <code>{user_id}</code> | Chat: <code>{chat_id}</code>\n"
                 f"  Balance: {format_number(token_balance)} NES"
             )
         
-        message_header = f"👥 *Total Users: {total_users}*\n\n"
+        message_header = f"👥 <b>Total Users: {total_users}</b>\n\n"
         
         if not user_list:
             await update.message.reply_text("No users found.")
@@ -662,7 +665,8 @@ async def listusers(update: Update, context: ContextTypes.DEFAULT_TYPE):
             chunk = user_list[i:i + chunk_size]
             message = message_header if i == 0 else ""
             message += "\n\n".join(chunk)
-            await update.message.reply_text(message, parse_mode='Markdown')
+            # ✅ Utiliser HTML au lieu de Markdown
+            await update.message.reply_text(message, parse_mode='HTML')
             if i + chunk_size < len(user_list):
                 await asyncio.sleep(0.5)
         
