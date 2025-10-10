@@ -1,6 +1,6 @@
 from datetime import datetime
 import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update, BotCommand
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 from dotenv import load_dotenv
 import firebase_admin
@@ -585,20 +585,29 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
         f"Merci pour votre achat premium 🌟"
     )
 
+# Fonction pour définir les commandes du bot
+async def post_init(application):
+    """Configure les commandes du bot au démarrage"""
+    commands = [
+        BotCommand("start", "Start the bot"),
+    ]
+    
+    await application.bot.set_my_commands(commands)
+    logger.info("Bot commands configured successfully")
 
 
 # Main function to set up the bot
 def main():
-    application = ApplicationBuilder().token(API_TOKEN).build()
+    application = ApplicationBuilder().token(API_TOKEN).post_init(post_init).build()
 
-    # Add command handlers (existants)
+    # Add command handlers
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('broadcast', broadcast))
     application.add_handler(CommandHandler('leaderboard', leaderboard))
     application.add_handler(CommandHandler('profile', profile))
     application.add_handler(CallbackQueryHandler(button_handler))
     
-    # NOUVEAUX gestionnaires pour les paiements Stars
+    # Payment handlers
     application.add_handler(PreCheckoutQueryHandler(pre_checkout_handler))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
