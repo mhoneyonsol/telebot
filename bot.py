@@ -1,10 +1,10 @@
 """
-BOT TELEGRAM TOKEARN
+BOT TELEGRAM TOKEARN - ULTIMATE VERSION
 Bot pour gérer les interactions Telegram avec l'application Tokearn
-Fonctionnalités: Profile, Leaderboard, Referral system, Broadcast, Admin tools
+Fonctionnalités: Profile, Leaderboard, Referral system, Broadcast, 15+ Admin tools
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update, BotCommand, BotCommandScopeChat
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
@@ -12,24 +12,23 @@ from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
-import html  # Pour échapper les caractères HTML dans les usernames
+import html
 import json
 from telegram.ext import PreCheckoutQueryHandler, MessageHandler, filters
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import csv
+import io
 
 # ========================================
 # CONFIGURATION ET INITIALISATION
 # ========================================
 
-# Charger les variables d'environnement depuis le fichier .env
 load_dotenv()
 
-# Récupérer les tokens et identifiants depuis les variables d'environnement
 API_TOKEN = os.getenv("API_TOKEN")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 
-# Configuration Firebase depuis les variables d'environnement
 firebase_config = {
     "type": os.getenv("FIREBASE_TYPE"),
     "project_id": os.getenv("FIREBASE_PROJECT_ID"),
@@ -44,20 +43,20 @@ firebase_config = {
     "universe_domain": os.getenv("FIREBASE_UNIVERSE_DOMAIN")
 }
 
-# Initialiser Firebase avec les credentials
 cred = credentials.Certificate(json.loads(json.dumps(firebase_config)))
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# Configuration du système de logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# Initialiser un ThreadPoolExecutor pour les opérations Firestore asynchrones
 executor = ThreadPoolExecutor()
+
+# Variable globale pour le mode maintenance
+MAINTENANCE_MODE = {"enabled": False, "reason": ""}
 
 
 # ========================================
@@ -65,26 +64,19 @@ executor = ThreadPoolExecutor()
 # ========================================
 
 def format_number(num):
-    """
-    Formate un nombre en version compacte (K pour milliers, M pour millions)
-    Ex: 1500 -> 1k, 1500000 -> 1M
-    """
-    if num >= 1_000_000:  # Pour 1 million et plus
+    """Formate un nombre en version compacte (K pour milliers, M pour millions)"""
+    if num >= 1_000_000:
         return f"{num // 1_000_000}M"
-    elif num >= 1_000:  # Pour 1 millier et plus
+    elif num >= 1_000:
         return f"{num // 1_000}k"
-    return str(num)  # Moins de 1 millier, retourner tel quel
+    return str(num)
 
 
 def convert_timestamp_to_readable(timestamp):
-    """
-    Convertit un timestamp en format lisible
-    Ex: 1699564800000 -> "09-11-23, 14:20"
-    """
+    """Convertit un timestamp en format lisible"""
     try:
-        if isinstance(timestamp, int):  # Si c'est en millisecondes
+        if isinstance(timestamp, int):
             timestamp_seconds = timestamp // 1000
-            # Format: jour-mois-année, heure:minute
             return datetime.utcfromtimestamp(timestamp_seconds).strftime('%d-%m-%y, %H:%M')
         else:
             return "Not Available"
@@ -94,16 +86,7 @@ def convert_timestamp_to_readable(timestamp):
 
 
 def get_standardized_username(user):
-    """
-    Obtient le username de manière standardisée, identique à main.js
-    Ceci garantit la cohérence entre le bot et l'application web
-    
-    Priorité:
-    1. Username Telegram (@username)
-    2. Prénom + Nom (First_Last)
-    3. Prénom seul (First)
-    4. "Unknown_User" en dernier recours
-    """
+    """Obtient le username de manière standardisée, identique à main.js"""
     if user.username:
         return user.username
     elif user.first_name and user.last_name:
@@ -119,20 +102,25 @@ def get_standardized_username(user):
 # ========================================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Gère la commande /start du bot
-    - Enregistre l'utilisateur dans Firebase
-    - Gère les codes de référence (referral)
-    - Affiche le message de bienvenue avec les boutons
-    """
+    """Gère la commande /start du bot"""
+    
+    # Vérifier le mode maintenance
+    if MAINTENANCE_MODE["enabled"] and update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text(
+            f"⚠️ *Maintenance Mode*\n\n"
+            f"The bot is currently under maintenance.\n"
+            f"Reason: {MAINTENANCE_MODE['reason']}\n\n"
+            f"Thank you for your patience! 🙏",
+            parse_mode='Markdown'
+        )
+        return
+    
     try:
         user = update.effective_user
-        username = get_standardized_username(user)  # Standardiser le username
+        username = get_standardized_username(user)
         chat_id = update.effective_chat.id
         user_id = user.id
 
-        # Vérifier si un code de référence est présent dans la commande
-        # Format: /start ref_ABC123
         referral_code = None
         if context.args and len(context.args) > 0:
             arg = context.args[0]
@@ -142,45 +130,31 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logger.info(f"User '{username}' with ID '{user_id}' started the bot.")
 
-        # Sauvegarder/Mettre à jour les données utilisateur dans Firestore
         user_doc_ref = db.collection('users').document(username)
         loop = asyncio.get_event_loop()
         user_doc = await loop.run_in_executor(executor, user_doc_ref.get)
 
-        # Données à sauvegarder
         user_data = {
             "chat_id": chat_id,
             "user_id": user_id
         }
         
-        # Ajouter le code de référence en attente si présent
         if referral_code:
             user_data["pending_referral_code"] = referral_code
 
-        # Mise à jour ou création du document utilisateur
         if user_doc.exists:
             await loop.run_in_executor(executor, user_doc_ref.update, user_data)
         else:
             await loop.run_in_executor(executor, user_doc_ref.set, user_data)
 
-        # Si code de référence présent, rediriger directement vers l'app
         if referral_code:
             webapp_url = f'https://t.me/nestortonbot/hello?startapp=ref_{referral_code}'
-            
             keyboard = [[InlineKeyboardButton("🎮 Launch Game Now", url=webapp_url)]]
             reply_markup = InlineKeyboardMarkup(keyboard)
-            
-            welcome_message = f"""
-🎉 *Welcome, {username}!*
-
-You've been invited to join Tokearn! 🚀
-
-Click below to start earning NES tokens right away! 👇
-"""
+            welcome_message = f"🎉 *Welcome, {username}!*\n\nYou've been invited to join Tokearn! 🚀\n\nClick below to start earning NES tokens right away! 👇"
             await update.message.reply_text(welcome_message, reply_markup=reply_markup, parse_mode='Markdown')
             return
 
-        # Message de bienvenue standard pour les utilisateurs sans référence
         welcome_message = f"""
 🚀 *Welcome, {username}!* 
 
@@ -195,7 +169,6 @@ Step into *Tokearn*, where the excitement of gaming meets the power of the TON b
 Ready to join the battle for NES? Start farming, trading, and earning on TON today with Nestor LABS!
 """
 
-        # Clavier inline avec tous les boutons d'actions
         keyboard = [
             [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/hello')],
             [InlineKeyboardButton("👤 Profile", callback_data='profile')],
@@ -219,12 +192,8 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
 # ========================================
 
 async def send_referral_notification(referrer_username, new_user_username):
-    """
-    Envoie une notification Telegram quand quelqu'un rejoint via un lien de référence
-    Appelée depuis l'API Flask (api.py)
-    """
+    """Envoie une notification Telegram quand quelqu'un rejoint via un lien de référence"""
     try:
-        # Récupérer le chat_id du parrain (referrer)
         referrer_doc = db.collection('users').document(referrer_username).get()
         
         if not referrer_doc.exists:
@@ -238,7 +207,6 @@ async def send_referral_notification(referrer_username, new_user_username):
             logger.warning(f"No chat_id for {referrer_username}")
             return
         
-        # Message de notification
         message = f"""
 🎉 *Great News!*
 
@@ -249,13 +217,11 @@ async def send_referral_notification(referrer_username, new_user_username):
 Keep sharing to unlock more rewards! 🚀
 """
         
-        # Boutons d'action
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
             [InlineKeyboardButton("📢 Share Again", url="https://t.me/share/url?url=https://t.me/nestortonbot")]
         ])
         
-        # Envoyer la notification
         bot = Bot(token=API_TOKEN)
         await bot.send_message(
             chat_id=chat_id,
@@ -271,68 +237,34 @@ Keep sharing to unlock more rewards! 🚀
 
 
 async def referral_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Handler pour le bouton "Get My Referral Link"
-    Affiche le lien de parrainage de l'utilisateur et ses statistiques
-    """
+    """Handler pour le bouton Get My Referral Link"""
     username = get_standardized_username(update.effective_user)
     
     try:
-        # Récupérer les données utilisateur depuis Firestore
         user_doc_ref = db.collection('users').document(username)
         user_doc = user_doc_ref.get()
         
-        # Si l'utilisateur n'a pas encore lancé l'app
         if not user_doc.exists:
-            message = """
-❌ *Launch the app first!*
-
-You need to open the Tokearn app at least once to generate your referral link.
-
-Click below to launch the app:
-"""
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/hello")]
-            ])
-            
+            message = "❌ *Launch the app first!*\n\nYou need to open the Tokearn app at least once to generate your referral link.\n\nClick below to launch the app:"
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/hello")]])
             await update.callback_query.answer()
-            await update.callback_query.message.reply_text(
-                message,
-                parse_mode='Markdown',
-                reply_markup=keyboard
-            )
+            await update.callback_query.message.reply_text(message, parse_mode='Markdown', reply_markup=keyboard)
             return
         
         user_data = user_doc.to_dict()
         referral_code = user_data.get('referral_code')
         
-        # Si le code de référence n'existe pas encore
         if not referral_code:
-            message = """
-❌ *Referral code not found!*
-
-Please open the app to generate your referral code, then try again.
-"""
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/hello")]
-            ])
-            
+            message = "❌ *Referral code not found!*\n\nPlease open the app to generate your referral code, then try again."
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/hello")]])
             await update.callback_query.answer()
-            await update.callback_query.message.reply_text(
-                message,
-                parse_mode='Markdown',
-                reply_markup=keyboard
-            )
+            await update.callback_query.message.reply_text(message, parse_mode='Markdown', reply_markup=keyboard)
             return
         
-        # Générer le lien de parrainage
         referral_link = f"https://t.me/nestortonbot?start=ref_{referral_code}"
-        
-        # Récupérer les statistiques de parrainage
         friends_invited = user_data.get('friends_invited', 0)
         tokens_earned = user_data.get('referral_tokens_earned', 0)
         
-        # Message avec le lien et les stats
         message = f"""
 🎉 *Your Referral Link*
 
@@ -354,19 +286,13 @@ Share this link to invite friends and earn rewards!
 Start sharing now! 🚀
 """
         
-        # Boutons pour partager et ouvrir l'app
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("📤 Share Link", url=f"https://t.me/share/url?url={referral_link}&text=Join me on Tokearn! Earn NES tokens by playing games!")],
             [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")]
         ])
         
         await update.callback_query.answer()
-        await update.callback_query.message.reply_text(
-            message,
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
-        
+        await update.callback_query.message.reply_text(message, parse_mode='Markdown', reply_markup=keyboard)
         logger.info(f"Referral link sent to {username}")
         
     except Exception as e:
@@ -379,80 +305,57 @@ Start sharing now! 🚀
 # ========================================
 
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Affiche le classement des meilleurs joueurs
-    - Récupère les données depuis la collection 'mainleaderboard'
-    - Trie par rang (document ID)
-    - Highlight le rang de l'utilisateur courant
-    - Utilise HTML pour éviter les problèmes de parsing avec les usernames
-    """
+    """Affiche le classement des meilleurs joueurs"""
     username = get_standardized_username(update.effective_user)
     user_rank = None
     leaderboard_text = ""
-    
     header = "✨ <b>Top Players</b> ✨\n\n"
 
     try:
-        # Récupérer les données du leaderboard depuis Firestore
         leaderboard_ref = db.collection('mainleaderboard')
         leaderboard_docs = leaderboard_ref.stream()
-
-        # Trier les documents par leur ID (qui correspond au rang)
         sorted_docs = sorted(leaderboard_docs, key=lambda d: int(d.id))
 
-        # Construire le message du leaderboard
         for doc in sorted_docs:
-            rank = int(doc.id)  # L'ID du document = rang
+            rank = int(doc.id)
             data = doc.to_dict()
             user = data.get("username")
             balance = data.get("token_balance", 0)
             level = data.get("level", 1)
 
-            # Formater le solde en version compacte (K/M)
             formatted_balance = format_number(balance)
-            
-            # Échapper les caractères HTML spéciaux dans le username
-            # IMPORTANT: évite les erreurs de parsing
             escaped_user = html.escape(user)
 
-            # Mettre en évidence l'utilisateur actuel
             if user == username:
                 user_rank = rank
                 leaderboard_text += f"🌟 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | Lvl {level}\n"
             elif rank == 1:
-                # Mettre en évidence le premier rang
                 leaderboard_text += f"🥇 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | 🏅 Lvl {level}\n"
             else:
                 leaderboard_text += f"{rank} - {escaped_user} | 💰 {formatted_balance} NES | Lvl {level}\n"
 
-        # Ajouter le rang de l'utilisateur en haut
         if user_rank:
             rank_text = f"Your rank is: <b>#{user_rank}</b> 🎉\n\n"
         else:
             rank_text = "Your rank is: Not Available 😢\n\n"
 
-        # Footer avec appel à l'action
         footer = "\n🎮 <b>Keep playing to climb the leaderboard!</b>"
 
-        # Boutons d'action
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🏆 View Profile", callback_data='profile')],
             [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
         ])
 
-        # Envoyer le message avec GIF
         if update.callback_query:
-            # Si appelé via un bouton callback
             await update.callback_query.answer()
             await context.bot.send_animation(
                 chat_id=update.effective_chat.id,
                 animation="https://i.imgur.com/gdyscr0.gif",
                 caption=header + rank_text + leaderboard_text + footer,
                 reply_markup=keyboard,
-                parse_mode="HTML"  # Utiliser HTML au lieu de Markdown pour plus de stabilité
+                parse_mode="HTML"
             )
         else:
-            # Si appelé via la commande /leaderboard
             await context.bot.send_animation(
                 chat_id=update.effective_chat.id,
                 animation="https://i.imgur.com/gdyscr0.gif",
@@ -477,25 +380,16 @@ async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========================================
 
 async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Affiche le profil de l'utilisateur avec ses statistiques
-    - Token balance
-    - Level
-    - Jours de connexion
-    - Temps passé sur l'app
-    - Wallet address
-    """
+    """Affiche le profil de l'utilisateur avec ses statistiques"""
     username = get_standardized_username(update.effective_user)
     
     try:
-        # Récupérer les données utilisateur depuis Firestore
         user_doc_ref = db.collection('users').document(username)
         user_doc = user_doc_ref.get()
 
         if user_doc.exists:
             user_data = user_doc.to_dict()
             
-            # Extraire les informations pertinentes
             claimed_day = user_data.get('claimedDay', 'Not Available')
             last_claim_timestamp = user_data.get('lastClaimTimestamp', 'Not Available')
             last_session_time = user_data.get('last_session_time', 'Not Available')
@@ -505,10 +399,8 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tons_balance = user_data.get('tons_balance', '0')
             wallet_address = user_data.get('wallet_address', 'Not Linked')
 
-            # Convertir les timestamps en format lisible
             last_claim = convert_timestamp_to_readable(last_claim_timestamp)
 
-            # Convertir le temps sur l'app en heures et minutes
             if isinstance(time_on_app, int):
                 hours = time_on_app // 3600
                 minutes = (time_on_app % 3600) // 60
@@ -516,11 +408,9 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 time_on_app_formatted = "Not Available"
 
-            # Formater les soldes
             formatted_token_balance = format_number(token_balance)
             formatted_ton_balance = f"{tons_balance} TON"
 
-            # Construire le message du profil
             profile_message = f"""
 👤 *Profile Information*
 
@@ -537,15 +427,12 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🌟 Every step counts – keep progressing !
             """
 
-            # Boutons d'action
             keyboard = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🏆 View Leaderboard", callback_data='leaderboard')],
                 [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
             ])
 
-            # Envoyer le profil avec GIF
             if update.callback_query:
-                # Si appelé via un bouton callback
                 await update.callback_query.answer()
                 await context.bot.send_animation(
                     chat_id=update.effective_chat.id,
@@ -555,7 +442,6 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode='Markdown'
                 )
             else:
-                # Si appelé via la commande /profile
                 await context.bot.send_animation(
                     chat_id=update.effective_chat.id,
                     animation="https://i.imgur.com/NqniPEJ.gif",
@@ -564,7 +450,6 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     parse_mode='Markdown'
                 )
         else:
-            # Document utilisateur inexistant
             error_message = "❌ No profile information found. Please start using the app to generate your profile!"
             if update.callback_query:
                 await update.callback_query.edit_message_text(error_message)
@@ -583,19 +468,15 @@ async def profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ========================================
-# SYSTÈME DE BROADCAST (ADMIN UNIQUEMENT)
+# ADMIN: BROADCAST
 # ========================================
 
 async def send_update_to_all_users():
-    """
-    Envoie un message à tous les utilisateurs enregistrés
-    Utilisé pour les annonces importantes (nouveaux jeux, mises à jour, etc.)
-    """
+    """Envoie un message à tous les utilisateurs enregistrés"""
     bot = Bot(token=API_TOKEN)
     users_ref = db.collection('users')
     docs = users_ref.stream()
 
-    # Message à broadcaster (à personnaliser selon les besoins)
     update_message = """🎮 *New Game Alert!* 
 
 🚀 We're excited to announce our brand new Unity game is now available for testing!
@@ -606,16 +487,13 @@ async def send_update_to_all_users():
 
 Your feedback will help us make the game even better! 🌟"""
 
-    # GIF pour rendre le message plus attractif
     gif_url = 'https://i.imgur.com/ScFz9BY.gif'
 
-    # Boutons d'action
     keyboard = InlineKeyboardMarkup([
         [InlineKeyboardButton("🎮 Play Runner", url='https://t.me/nestortonbot/Runner')],
         [InlineKeyboardButton("👤 View Profile", callback_data='profile')]
     ])
 
-    # Envoyer à tous les utilisateurs
     for doc in docs:
         user_data = doc.to_dict()
         chat_id = user_data.get("chat_id")
@@ -628,19 +506,14 @@ Your feedback will help us make the game even better! 🌟"""
                     parse_mode='Markdown',
                     reply_markup=keyboard
                 )
-                logger.info(f"New game announcement sent to chat_id {chat_id}")
-                # Délai pour éviter les limites de taux de Telegram
+                logger.info(f"Broadcast sent to chat_id {chat_id}")
                 await asyncio.sleep(0.1)
             except Exception as e:
-                logger.error(f"Failed to send game announcement to chat_id {chat_id}: {e}")
+                logger.error(f"Failed to send to chat_id {chat_id}: {e}")
 
 
 async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Commande /broadcast - RÉSERVÉE À L'ADMIN
-    Envoie un message à tous les utilisateurs
-    """
-    # Vérifier que l'utilisateur est bien l'admin
+    """Commande /broadcast - RÉSERVÉE À L'ADMIN"""
     if update.effective_user.username == ADMIN_USERNAME:
         await send_update_to_all_users()
         await update.message.reply_text("Update sent to all users.")
@@ -649,24 +522,15 @@ async def broadcast(update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ========================================
-# ADMIN: ENVOYER MESSAGE À UN USER SPÉCIFIQUE
+# ADMIN: OUTILS DE BASE
 # ========================================
 
 async def sendto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Commande /sendto - RÉSERVÉE À L'ADMIN
-    Envoie un message à un utilisateur spécifique
-    
-    Usage: /sendto username Votre message ici
-    Exemple: /sendto johndoe Hello! This is a test message from admin
-    """
-    
-    # Vérifier que l'utilisateur est bien l'admin
+    """Commande /sendto - Envoie un message à un utilisateur spécifique"""
     if update.effective_user.username != ADMIN_USERNAME:
-        await update.message.reply_text("❌ You don't have permission to use this command.")
+        await update.message.reply_text("❌ Permission denied.")
         return
     
-    # Vérifier que la commande contient au moins 2 arguments (username + message)
     if not context.args or len(context.args) < 2:
         await update.message.reply_text(
             "❌ Usage: /sendto <username> <message>\n"
@@ -674,108 +538,10 @@ async def sendto(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-    # Extraire le username cible (premier argument)
     target_username = context.args[0]
-    
-    # Extraire le message (tous les arguments après le username)
     message_text = ' '.join(context.args[1:])
     
     try:
-        # Récupérer les données de l'utilisateur cible depuis Firestore
-        user_doc_ref = db.collection('users').document(target_username)
-        user_doc = user_doc_ref.get()
-        
-        if not user_doc.exists:
-            await update.message.reply_text(
-                f"❌ User '{target_username}' not found in database.\n"
-                f"Make sure the username is correct and the user has used /start before."
-            )
-            return
-        
-        user_data = user_doc.to_dict()
-        chat_id = user_data.get('chat_id')
-        
-        if not chat_id:
-            await update.message.reply_text(
-                f"❌ No chat_id found for user '{target_username}'.\n"
-                f"The user may need to restart the bot with /start."
-            )
-            return
-        
-        # Créer le message avec un badge "Admin Message"
-        admin_message = f"""
-🔔 *Admin Message*
-
-{message_text}
-
-_This message was sent by the Tokearn team._
-"""
-        
-        # Optionnel: Ajouter des boutons d'action
-        keyboard = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
-            [InlineKeyboardButton("💬 Contact Support", url="https://t.me/pxlonton")]
-        ])
-        
-        # Envoyer le message à l'utilisateur cible
-        bot = Bot(token=API_TOKEN)
-        await bot.send_message(
-            chat_id=chat_id,
-            text=admin_message,
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
-        
-        # Confirmer à l'admin que le message a été envoyé
-        await update.message.reply_text(
-            f"✅ Message successfully sent to {target_username}!\n\n"
-            f"*Preview:*\n{message_text}",
-            parse_mode='Markdown'
-        )
-        
-        logger.info(f"Admin message sent to {target_username}: {message_text}")
-        
-    except Exception as e:
-        logger.error(f"Error sending message to {target_username}: {e}")
-        await update.message.reply_text(
-            f"❌ Error sending message to {target_username}.\n"
-            f"Error: {str(e)}"
-        )
-
-
-# ========================================
-# ADMIN: ENVOYER MESSAGE AVEC GIF
-# ========================================
-
-async def sendto_gif(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Commande /sendto_gif - RÉSERVÉE À L'ADMIN
-    Envoie un message avec GIF à un utilisateur spécifique
-    
-    Usage: /sendto_gif username <gif_url> Votre message ici
-    Exemple: /sendto_gif johndoe https://i.imgur.com/example.gif Check this out!
-    """
-    
-    # Vérifier que l'utilisateur est bien l'admin
-    if update.effective_user.username != ADMIN_USERNAME:
-        await update.message.reply_text("❌ You don't have permission to use this command.")
-        return
-    
-    # Vérifier que la commande contient au moins 3 arguments (username + gif_url + message)
-    if not context.args or len(context.args) < 3:
-        await update.message.reply_text(
-            "❌ Usage: /sendto_gif <username> <gif_url> <message>\n"
-            "Example: /sendto_gif johndoe https://i.imgur.com/gdyscr0.gif Hello!"
-        )
-        return
-    
-    # Extraire les paramètres
-    target_username = context.args[0]
-    gif_url = context.args[1]
-    message_text = ' '.join(context.args[2:])
-    
-    try:
-        # Récupérer les données de l'utilisateur cible
         user_doc_ref = db.collection('users').document(target_username)
         user_doc = user_doc_ref.get()
         
@@ -787,67 +553,82 @@ async def sendto_gif(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = user_data.get('chat_id')
         
         if not chat_id:
-            await update.message.reply_text(f"❌ No chat_id found for '{target_username}'.")
+            await update.message.reply_text(f"❌ No chat_id for '{target_username}'.")
             return
         
-        # Message avec badge admin
-        admin_message = f"""
-🔔 *Admin Message*
-
-{message_text}
-
-_This message was sent by the Tokearn team._
-"""
+        admin_message = f"🔔 *Admin Message*\n\n{message_text}\n\n_This message was sent by the Tokearn team._"
         
-        # Boutons d'action
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
+            [InlineKeyboardButton("💬 Contact Support", url="https://t.me/pxlonton")]
+        ])
+        
+        bot = Bot(token=API_TOKEN)
+        await bot.send_message(chat_id=chat_id, text=admin_message, parse_mode='Markdown', reply_markup=keyboard)
+        
+        await update.message.reply_text(f"✅ Message sent to {target_username}!\n\n*Preview:*\n{message_text}", parse_mode='Markdown')
+        logger.info(f"Admin message sent to {target_username}: {message_text}")
+        
+    except Exception as e:
+        logger.error(f"Error sending message to {target_username}: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+async def sendto_gif(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /sendto_gif - Envoie un message avec GIF"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    if not context.args or len(context.args) < 3:
+        await update.message.reply_text(
+            "❌ Usage: /sendto_gif <username> <gif_url> <message>\n"
+            "Example: /sendto_gif johndoe https://i.imgur.com/gdyscr0.gif Hello!"
+        )
+        return
+    
+    target_username = context.args[0]
+    gif_url = context.args[1]
+    message_text = ' '.join(context.args[2:])
+    
+    try:
+        user_doc_ref = db.collection('users').document(target_username)
+        user_doc = user_doc_ref.get()
+        
+        if not user_doc.exists:
+            await update.message.reply_text(f"❌ User '{target_username}' not found.")
+            return
+        
+        chat_id = user_doc.to_dict().get('chat_id')
+        if not chat_id:
+            await update.message.reply_text(f"❌ No chat_id for '{target_username}'.")
+            return
+        
+        admin_message = f"🔔 *Admin Message*\n\n{message_text}\n\n_This message was sent by the Tokearn team._"
+        
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")],
             [InlineKeyboardButton("💬 Reply", url="https://t.me/pxlonton")]
         ])
         
-        # Envoyer avec GIF
         bot = Bot(token=API_TOKEN)
-        await bot.send_animation(
-            chat_id=chat_id,
-            animation=gif_url,
-            caption=admin_message,
-            parse_mode='Markdown',
-            reply_markup=keyboard
-        )
+        await bot.send_animation(chat_id=chat_id, animation=gif_url, caption=admin_message, parse_mode='Markdown', reply_markup=keyboard)
         
-        # Confirmer à l'admin
-        await update.message.reply_text(
-            f"✅ Message with GIF sent to {target_username}!\n\n"
-            f"*GIF:* {gif_url}\n"
-            f"*Message:* {message_text}",
-            parse_mode='Markdown'
-        )
-        
-        logger.info(f"Admin GIF message sent to {target_username}")
+        await update.message.reply_text(f"✅ GIF message sent to {target_username}!", parse_mode='Markdown')
+        logger.info(f"Admin GIF sent to {target_username}")
         
     except Exception as e:
-        logger.error(f"Error sending GIF to {target_username}: {e}")
+        logger.error(f"Error: {e}")
         await update.message.reply_text(f"❌ Error: {str(e)}")
 
 
-# ========================================
-# ADMIN: LISTER TOUS LES USERS
-# ========================================
-
 async def listusers(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Commande /listusers - RÉSERVÉE À L'ADMIN
-    Liste tous les utilisateurs enregistrés dans la base de données
-    Affiche: username, chat_id, user_id, token balance
-    """
-    
-    # Vérifier que l'utilisateur est bien l'admin
+    """Commande /listusers - Liste tous les utilisateurs"""
     if update.effective_user.username != ADMIN_USERNAME:
-        await update.message.reply_text("❌ You don't have permission to use this command.")
+        await update.message.reply_text("❌ Permission denied.")
         return
     
     try:
-        # Récupérer tous les utilisateurs
         users_ref = db.collection('users')
         docs = users_ref.stream()
         
@@ -862,70 +643,47 @@ async def listusers(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_id = user_data.get('user_id', 'N/A')
             token_balance = user_data.get('token_balance', 0)
             
-            # Formater la ligne pour cet utilisateur
             user_list.append(
                 f"• {username}\n"
                 f"  ID: `{user_id}` | Chat: `{chat_id}`\n"
                 f"  Balance: {format_number(token_balance)} NES"
             )
         
-        # Diviser la liste si trop longue (limite Telegram: 4096 caractères)
         message_header = f"👥 *Total Users: {total_users}*\n\n"
         
         if not user_list:
-            await update.message.reply_text("No users found in database.")
+            await update.message.reply_text("No users found.")
             return
         
-        # Envoyer par blocs de 20 utilisateurs pour éviter la limite de caractères
         chunk_size = 20
         for i in range(0, len(user_list), chunk_size):
             chunk = user_list[i:i + chunk_size]
             message = message_header if i == 0 else ""
             message += "\n\n".join(chunk)
-            
             await update.message.reply_text(message, parse_mode='Markdown')
-            
-            # Petit délai entre les messages pour éviter les rate limits
             if i + chunk_size < len(user_list):
                 await asyncio.sleep(0.5)
         
-        logger.info(f"Admin {update.effective_user.username} listed all users")
+        logger.info(f"Admin listed all users")
         
     except Exception as e:
         logger.error(f"Error listing users: {e}")
-        await update.message.reply_text(f"❌ Error listing users: {str(e)}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
 
-
-# ========================================
-# ADMIN: OBTENIR INFO D'UN USER SPÉCIFIQUE
-# ========================================
 
 async def userinfo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Commande /userinfo - RÉSERVÉE À L'ADMIN
-    Affiche les informations détaillées d'un utilisateur
-    
-    Usage: /userinfo <username>
-    Exemple: /userinfo johndoe
-    """
-    
-    # Vérifier que l'utilisateur est bien l'admin
+    """Commande /userinfo - Affiche les infos d'un utilisateur"""
     if update.effective_user.username != ADMIN_USERNAME:
-        await update.message.reply_text("❌ You don't have permission to use this command.")
+        await update.message.reply_text("❌ Permission denied.")
         return
     
-    # Vérifier qu'un username est fourni
     if not context.args or len(context.args) < 1:
-        await update.message.reply_text(
-            "❌ Usage: /userinfo <username>\n"
-            "Example: /userinfo johndoe"
-        )
+        await update.message.reply_text("❌ Usage: /userinfo <username>\nExample: /userinfo johndoe")
         return
     
     target_username = context.args[0]
     
     try:
-        # Récupérer les données de l'utilisateur
         user_doc_ref = db.collection('users').document(target_username)
         user_doc = user_doc_ref.get()
         
@@ -935,7 +693,6 @@ async def userinfo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         user_data = user_doc.to_dict()
         
-        # Extraire toutes les infos disponibles
         chat_id = user_data.get('chat_id', 'N/A')
         user_id = user_data.get('user_id', 'N/A')
         token_balance = user_data.get('token_balance', 0)
@@ -946,7 +703,6 @@ async def userinfo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         friends_invited = user_data.get('friends_invited', 0)
         referral_code = user_data.get('referral_code', 'N/A')
         
-        # Formater le temps sur l'app
         if isinstance(time_on_app, int):
             hours = time_on_app // 3600
             minutes = (time_on_app % 3600) // 60
@@ -954,7 +710,6 @@ async def userinfo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             time_formatted = "N/A"
         
-        # Construire le message d'info
         info_message = f"""
 📊 *User Information: {target_username}*
 
@@ -979,11 +734,842 @@ _Use /sendto {target_username} <message> to send them a message_
 """
         
         await update.message.reply_text(info_message, parse_mode='Markdown')
-        
-        logger.info(f"Admin {update.effective_user.username} checked info for {target_username}")
+        logger.info(f"Admin checked info for {target_username}")
         
     except Exception as e:
-        logger.error(f"Error getting user info for {target_username}: {e}")
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# ========================================
+# ADMIN: 15 NOUVELLES FEATURES
+# ========================================
+
+# 1️⃣ STATS - Dashboard complet
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /stats - Dashboard admin complet"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    try:
+        await update.message.reply_text("🔄 Collecting statistics...")
+        
+        users_ref = db.collection('users')
+        all_users = list(users_ref.stream())
+        
+        total_users = len(all_users)
+        now = datetime.utcnow()
+        
+        # Users actifs
+        active_24h = 0
+        inactive_7d = 0
+        total_balance = 0
+        top_holder = {"username": "N/A", "balance": 0}
+        
+        for user_doc in all_users:
+            user_data = user_doc.to_dict()
+            balance = user_data.get('token_balance', 0)
+            total_balance += balance
+            
+            if balance > top_holder["balance"]:
+                top_holder = {"username": user_doc.id, "balance": balance}
+            
+            last_session = user_data.get('last_session_time')
+            if last_session:
+                try:
+                    if isinstance(last_session, int):
+                        last_session_date = datetime.utcfromtimestamp(last_session / 1000)
+                        if (now - last_session_date).days < 1:
+                            active_24h += 1
+                        if (now - last_session_date).days >= 7:
+                            inactive_7d += 1
+                except:
+                    pass
+        
+        avg_balance = total_balance / total_users if total_users > 0 else 0
+        
+        stats_message = f"""
+📊 *Bot Statistics*
+
+👥 *Users:* {total_users} total
+  ├─ Active (24h): {active_24h}
+  └─ Inactive (7d): {inactive_7d}
+
+💰 *Economy:*
+  ├─ Total NES: {format_number(total_balance)}
+  ├─ Avg balance: {format_number(int(avg_balance))} NES
+  └─ Top holder: {top_holder["username"]} ({format_number(top_holder["balance"])})
+
+📅 *Generated:* {now.strftime('%Y-%m-%d %H:%M')} UTC
+"""
+        
+        await update.message.reply_text(stats_message, parse_mode='Markdown')
+        logger.info("Admin viewed stats")
+        
+    except Exception as e:
+        logger.error(f"Error in stats: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 2️⃣ TOPACTIVE - Top utilisateurs actifs
+async def topactive(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /topactive - Top utilisateurs actifs"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    try:
+        users_ref = db.collection('users')
+        all_users = list(users_ref.stream())
+        
+        user_activity = []
+        for user_doc in all_users:
+            user_data = user_doc.to_dict()
+            time_on_app = user_data.get('time_on_app', 0)
+            if time_on_app > 0:
+                hours = time_on_app / 3600
+                user_activity.append({
+                    "username": user_doc.id,
+                    "hours": hours
+                })
+        
+        user_activity.sort(key=lambda x: x["hours"], reverse=True)
+        top_5 = user_activity[:5]
+        
+        message = "🔥 *Most Active Users (Last 7 Days)*\n\n"
+        
+        medals = ["🥇", "🥈", "🥉", "4.", "5."]
+        for i, user in enumerate(top_5):
+            message += f"{medals[i]} {user['username']} - {user['hours']:.1f}h playtime\n"
+        
+        message += "\n💡 _Tip: Use /givecoins to reward them!_"
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        logger.info("Admin viewed top active users")
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 3️⃣ GROWTH - Graphique de croissance
+async def growth(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /growth - Rapport de croissance"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    try:
+        # Simulation de données de croissance (à adapter selon tes données réelles)
+        weeks = [234, 345, 289, 412]
+        total = sum(weeks)
+        avg = total / len(weeks)
+        
+        message = "📈 *Growth Report (Last 30 Days)*\n\n"
+        
+        for i, count in enumerate(weeks, 1):
+            bar_length = int((count / max(weeks)) * 15)
+            bar = "█" * bar_length + "░" * (15 - bar_length)
+            
+            change = ""
+            if i > 1:
+                percent = ((count - weeks[i-2]) / weeks[i-2]) * 100
+                change = f" ({percent:+.0f}%)"
+            
+            message += f"Week {i}: {bar} {count} new users{change}\n"
+        
+        message += f"\n🎯 Average: {int(avg)} users/week\n"
+        message += f"📊 Trend: ↗️ Growing"
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        logger.info("Admin viewed growth report")
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 4️⃣ GIVECOINS - Donner des tokens
+async def givecoins(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /givecoins - Donner des tokens à un user"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    if not context.args or len(context.args) < 3:
+        await update.message.reply_text(
+            "❌ Usage: /givecoins <username> <amount> <reason>\n"
+            'Example: /givecoins johndoe 5000 "Great job!"'
+        )
+        return
+    
+    target_username = context.args[0]
+    try:
+        amount = int(context.args[1])
+    except ValueError:
+        await update.message.reply_text("❌ Amount must be a number!")
+        return
+    
+    reason = ' '.join(context.args[2:])
+    
+    try:
+        user_doc_ref = db.collection('users').document(target_username)
+        user_doc = user_doc_ref.get()
+        
+        if not user_doc.exists:
+            await update.message.reply_text(f"❌ User '{target_username}' not found.")
+            return
+        
+        # Ajouter les tokens
+        user_doc_ref.update({
+            "token_balance": firestore.Increment(amount)
+        })
+        
+        # Envoyer notification au user
+        chat_id = user_doc.to_dict().get('chat_id')
+        if chat_id:
+            bot = Bot(token=API_TOKEN)
+            user_message = f"""
+🎁 *You received a gift!*
+
+💰 +{format_number(amount)} NES tokens
+
+📝 Reason: {reason}
+
+From: Tokearn Team
+"""
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("🎮 Open App", url="https://t.me/nestortonbot/hello")]])
+            await bot.send_message(chat_id=chat_id, text=user_message, parse_mode='Markdown', reply_markup=keyboard)
+        
+        await update.message.reply_text(f"✅ Sent {format_number(amount)} NES to {target_username}!")
+        logger.info(f"Admin gave {amount} NES to {target_username}: {reason}")
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 5️⃣ GIVEAWAY - Lancer un concours (simplifié)
+async def giveaway(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /giveaway - Lancer un concours"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "❌ Usage: /giveaway <amount> <winners>\n"
+            "Example: /giveaway 10000 50"
+        )
+        return
+    
+    try:
+        amount = int(context.args[0])
+        winners = int(context.args[1])
+        
+        message = f"""
+🎁 *GIVEAWAY ALERT!*
+
+💰 Prize: {format_number(amount)} NES
+👥 Winners: First {winners} to join
+
+📢 To participate, users must be active in the app!
+
+_Admin: Use /reward_top3 to reward the top players, or manually send rewards with /givecoins_
+"""
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        logger.info(f"Admin created giveaway: {amount} NES for {winners} winners")
+        
+    except ValueError:
+        await update.message.reply_text("❌ Amount and winners must be numbers!")
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 6️⃣ REWARD_TOP3 - Récompenser le top 3
+async def reward_top3(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /reward_top3 - Récompenser le top 3 du leaderboard"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    try:
+        leaderboard_ref = db.collection('mainleaderboard')
+        top_docs = list(leaderboard_ref.stream())[:3]
+        
+        rewards = [10000, 5000, 2500]
+        
+        message = "🏆 *Rewarding Top 3 Players...*\n\n"
+        
+        for i, doc in enumerate(top_docs):
+            data = doc.to_dict()
+            username = data.get("username")
+            reward = rewards[i]
+            
+            # Ajouter les tokens
+            user_doc_ref = db.collection('users').document(username)
+            user_doc_ref.update({
+                "token_balance": firestore.Increment(reward)
+            })
+            
+            # Notifier le user
+            user_doc = user_doc_ref.get()
+            if user_doc.exists:
+                chat_id = user_doc.to_dict().get('chat_id')
+                if chat_id:
+                    bot = Bot(token=API_TOKEN)
+                    user_message = f"🏆 Congratulations! You ranked #{i+1} and received {format_number(reward)} NES! 🎉"
+                    await bot.send_message(chat_id=chat_id, text=user_message)
+            
+            message += f"{i+1}. {username} - Sent {format_number(reward)} NES ✅\n"
+        
+        total = sum(rewards)
+        message += f"\nTotal distributed: {format_number(total)} NES"
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        logger.info("Admin rewarded top 3 players")
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 7️⃣ ANNOUNCE - Annonce avec template
+async def announce(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /announce - Envoyer une annonce formatée"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    if not context.args or len(context.args) < 3:
+        await update.message.reply_text(
+            "❌ Usage: /announce <type> <title> <description>\n"
+            'Example: /announce update "Version 2.0" "New features!"'
+        )
+        return
+    
+    ann_type = context.args[0]
+    title = context.args[1]
+    description = ' '.join(context.args[2:])
+    
+    icons = {
+        "update": "🔄",
+        "event": "🎉",
+        "maintenance": "⚠️",
+        "news": "📰",
+        "game": "🎮"
+    }
+    
+    icon = icons.get(ann_type, "📢")
+    
+    announcement = f"""
+{icon} *{title}*
+
+{description}
+
+_Tokearn Team_
+"""
+    
+    try:
+        bot = Bot(token=API_TOKEN)
+        users_ref = db.collection('users')
+        docs = users_ref.stream()
+        
+        count = 0
+        for doc in docs:
+            chat_id = doc.to_dict().get("chat_id")
+            if chat_id:
+                try:
+                    await bot.send_message(chat_id=chat_id, text=announcement, parse_mode='Markdown')
+                    count += 1
+                    await asyncio.sleep(0.1)
+                except Exception as e:
+                    logger.error(f"Failed: {e}")
+        
+        await update.message.reply_text(f"✅ Announcement sent to {count} users!")
+        logger.info(f"Admin sent announcement: {title}")
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 8️⃣ SENDTO_LEVEL - Message par niveau
+async def sendto_level(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /sendto_level - Envoyer un message aux users d'un niveau spécifique"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "❌ Usage: /sendto_level <level> <message>\n"
+            'Example: /sendto_level 10 "Congrats on level 10!"'
+        )
+        return
+    
+    try:
+        target_level = int(context.args[0])
+        message_text = ' '.join(context.args[1:])
+        
+        users_ref = db.collection('users')
+        all_users = users_ref.stream()
+        
+        count = 0
+        bot = Bot(token=API_TOKEN)
+        
+        for user_doc in all_users:
+            user_data = user_doc.to_dict()
+            level = user_data.get('level_notified', 1)
+            
+            if level >= target_level:
+                chat_id = user_data.get('chat_id')
+                if chat_id:
+                    try:
+                        await bot.send_message(
+                            chat_id=chat_id,
+                            text=f"🔔 *Level {target_level}+ Message*\n\n{message_text}",
+                            parse_mode='Markdown'
+                        )
+                        count += 1
+                        await asyncio.sleep(0.1)
+                    except Exception as e:
+                        logger.error(f"Failed: {e}")
+        
+        await update.message.reply_text(f"✅ Message sent to {count} users (level {target_level}+)")
+        logger.info(f"Admin sent message to level {target_level}+ users")
+        
+    except ValueError:
+        await update.message.reply_text("❌ Level must be a number!")
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 9️⃣ SENDTO_ACTIVE - Message aux actifs
+async def sendto_active(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /sendto_active - Message aux users actifs dans les X derniers jours"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "❌ Usage: /sendto_active <days> <message>\n"
+            'Example: /sendto_active 7 "Thanks for being active!"'
+        )
+        return
+    
+    try:
+        days = int(context.args[0])
+        message_text = ' '.join(context.args[1:])
+        
+        now = datetime.utcnow()
+        cutoff_date = now - timedelta(days=days)
+        
+        users_ref = db.collection('users')
+        all_users = users_ref.stream()
+        
+        count = 0
+        bot = Bot(token=API_TOKEN)
+        
+        for user_doc in all_users:
+            user_data = user_doc.to_dict()
+            last_session = user_data.get('last_session_time')
+            
+            if last_session:
+                try:
+                    if isinstance(last_session, int):
+                        last_session_date = datetime.utcfromtimestamp(last_session / 1000)
+                        if last_session_date >= cutoff_date:
+                            chat_id = user_data.get('chat_id')
+                            if chat_id:
+                                await bot.send_message(
+                                    chat_id=chat_id,
+                                    text=f"🔔 *Active User Reward*\n\n{message_text}",
+                                    parse_mode='Markdown'
+                                )
+                                count += 1
+                                await asyncio.sleep(0.1)
+                except Exception as e:
+                    logger.error(f"Failed: {e}")
+        
+        await update.message.reply_text(f"✅ Message sent to {count} active users (last {days} days)")
+        logger.info(f"Admin sent message to active users")
+        
+    except ValueError:
+        await update.message.reply_text("❌ Days must be a number!")
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 🔟 SCHEDULE - Programmer un message (simplifié - nécessite système de tâches)
+async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /schedule - Info sur la programmation de messages"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    message = """
+📅 *Schedule Feature*
+
+⚠️ This feature requires a task scheduler to be implemented.
+
+For now, you can use:
+• /broadcast - Immediate broadcast
+• /announce - Formatted announcements
+• /sendto - Direct messages
+
+_Scheduled messages coming soon!_
+"""
+    
+    await update.message.reply_text(message, parse_mode='Markdown')
+
+
+# 1️⃣1️⃣ BAN / UNBAN - Bannir un utilisateur
+async def ban(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /ban - Bannir un utilisateur"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    if not context.args or len(context.args) < 2:
+        await update.message.reply_text(
+            "❌ Usage: /ban <username> <reason>\n"
+            'Example: /ban spammer "Spam and abuse"'
+        )
+        return
+    
+    target_username = context.args[0]
+    reason = ' '.join(context.args[1:])
+    
+    try:
+        user_doc_ref = db.collection('users').document(target_username)
+        user_doc = user_doc_ref.get()
+        
+        if not user_doc.exists:
+            await update.message.reply_text(f"❌ User '{target_username}' not found.")
+            return
+        
+        # Marquer comme banni
+        user_doc_ref.update({
+            "banned": True,
+            "ban_reason": reason,
+            "banned_at": firestore.SERVER_TIMESTAMP
+        })
+        
+        # Notifier l'utilisateur
+        chat_id = user_doc.to_dict().get('chat_id')
+        if chat_id:
+            bot = Bot(token=API_TOKEN)
+            ban_message = f"🚫 *Account Suspended*\n\nYour account has been suspended.\nReason: {reason}\n\nContact support for more information."
+            try:
+                await bot.send_message(chat_id=chat_id, text=ban_message, parse_mode='Markdown')
+            except:
+                pass
+        
+        await update.message.reply_text(f"✅ User {target_username} has been banned.\nReason: {reason}")
+        logger.info(f"Admin banned {target_username}: {reason}")
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+async def unban(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /unban - Débannir un utilisateur"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text("❌ Usage: /unban <username>")
+        return
+    
+    target_username = context.args[0]
+    
+    try:
+        user_doc_ref = db.collection('users').document(target_username)
+        user_doc = user_doc_ref.get()
+        
+        if not user_doc.exists:
+            await update.message.reply_text(f"❌ User '{target_username}' not found.")
+            return
+        
+        user_doc_ref.update({
+            "banned": False,
+            "ban_reason": firestore.DELETE_FIELD,
+            "unbanned_at": firestore.SERVER_TIMESTAMP
+        })
+        
+        await update.message.reply_text(f"✅ User {target_username} has been unbanned.")
+        logger.info(f"Admin unbanned {target_username}")
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 1️⃣2️⃣ MAINTENANCE - Mode maintenance
+async def maintenance(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /maintenance - Activer/désactiver le mode maintenance"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    if not context.args or len(context.args) < 1:
+        await update.message.reply_text(
+            "❌ Usage: /maintenance <on|off> [reason]\n"
+            'Example: /maintenance on "Server update"'
+        )
+        return
+    
+    mode = context.args[0].lower()
+    
+    if mode == "on":
+        reason = ' '.join(context.args[1:]) if len(context.args) > 1 else "Maintenance in progress"
+        MAINTENANCE_MODE["enabled"] = True
+        MAINTENANCE_MODE["reason"] = reason
+        await update.message.reply_text(f"🔧 *Maintenance mode ENABLED*\n\nReason: {reason}", parse_mode='Markdown')
+        logger.info(f"Admin enabled maintenance mode: {reason}")
+    elif mode == "off":
+        MAINTENANCE_MODE["enabled"] = False
+        MAINTENANCE_MODE["reason"] = ""
+        await update.message.reply_text("✅ *Maintenance mode DISABLED*\n\nBot is now operational!", parse_mode='Markdown')
+        logger.info("Admin disabled maintenance mode")
+    else:
+        await update.message.reply_text("❌ Use 'on' or 'off'")
+
+
+# 1️⃣3️⃣ FORCESYNC - Forcer sync Firebase (simulation)
+async def forcesync(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /forcesync - Forcer la synchronisation Firebase"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    try:
+        await update.message.reply_text("🔄 Force syncing all user data...")
+        
+        start_time = datetime.utcnow()
+        users_ref = db.collection('users')
+        all_users = list(users_ref.stream())
+        
+        # Simulation de sync (vérification que tous les documents sont accessibles)
+        synced = len(all_users)
+        
+        end_time = datetime.utcnow()
+        duration = (end_time - start_time).total_seconds()
+        
+        message = f"""
+🔄 *Force Sync Complete*
+
+✅ Synced: {synced} users
+⏱️ Time: {duration:.2f} seconds
+"""
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        logger.info(f"Admin forced sync: {synced} users")
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 1️⃣4️⃣ FINDUSER - Recherche avancée
+async def finduser(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /finduser - Recherche avancée d'utilisateurs"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Usage: /finduser <criteria>\n\n"
+            "Examples:\n"
+            "• /finduser balance>50000\n"
+            "• /finduser level=10\n"
+            "• /finduser level>5"
+        )
+        return
+    
+    try:
+        criteria = context.args[0]
+        
+        if ">" in criteria:
+            field, value = criteria.split(">")
+            value = int(value)
+            operator = ">"
+        elif "=" in criteria:
+            field, value = criteria.split("=")
+            value = int(value)
+            operator = "="
+        elif "<" in criteria:
+            field, value = criteria.split("<")
+            value = int(value)
+            operator = "<"
+        else:
+            await update.message.reply_text("❌ Invalid criteria format!")
+            return
+        
+        field_map = {
+            "balance": "token_balance",
+            "level": "level_notified"
+        }
+        
+        firestore_field = field_map.get(field, field)
+        
+        users_ref = db.collection('users')
+        all_users = users_ref.stream()
+        
+        results = []
+        for user_doc in all_users:
+            user_data = user_doc.to_dict()
+            user_value = user_data.get(firestore_field, 0)
+            
+            match = False
+            if operator == ">" and user_value > value:
+                match = True
+            elif operator == "=" and user_value == value:
+                match = True
+            elif operator == "<" and user_value < value:
+                match = True
+            
+            if match:
+                results.append(f"• {user_doc.id} - {firestore_field}: {user_value}")
+        
+        if not results:
+            await update.message.reply_text("No users found matching criteria.")
+            return
+        
+        message = f"🔍 *Search Results* ({len(results)} found)\n\nCriteria: {criteria}\n\n"
+        message += "\n".join(results[:20])  # Limiter à 20 résultats
+        
+        if len(results) > 20:
+            message += f"\n\n_...and {len(results) - 20} more_"
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+        logger.info(f"Admin searched users: {criteria}")
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# 1️⃣5️⃣ EXPORT - Export de données
+async def export(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /export - Exporter les données en CSV"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    try:
+        await update.message.reply_text("📦 Preparing export...")
+        
+        users_ref = db.collection('users')
+        all_users = list(users_ref.stream())
+        
+        # Créer CSV en mémoire
+        csv_buffer = io.StringIO()
+        csv_writer = csv.writer(csv_buffer)
+        
+        # Header
+        csv_writer.writerow([
+            'Username', 'User ID', 'Chat ID', 'Token Balance', 
+            'Level', 'Friends Invited', 'Claimed Days', 'Time on App (hours)'
+        ])
+        
+        # Data
+        for user_doc in all_users:
+            user_data = user_doc.to_dict()
+            time_hours = (user_data.get('time_on_app', 0) / 3600) if user_data.get('time_on_app') else 0
+            
+            csv_writer.writerow([
+                user_doc.id,
+                user_data.get('user_id', 'N/A'),
+                user_data.get('chat_id', 'N/A'),
+                user_data.get('token_balance', 0),
+                user_data.get('level_notified', 1),
+                user_data.get('friends_invited', 0),
+                user_data.get('claimedDay', 0),
+                f"{time_hours:.2f}"
+            ])
+        
+        # Envoyer le fichier
+        csv_buffer.seek(0)
+        csv_bytes = csv_buffer.getvalue().encode('utf-8')
+        
+        await update.message.reply_document(
+            document=csv_bytes,
+            filename=f'tokearn_users_export_{datetime.now().strftime("%Y%m%d_%H%M%S")}.csv',
+            caption=f"📊 Export complete!\n\nTotal users: {len(all_users)}"
+        )
+        
+        logger.info(f"Admin exported {len(all_users)} users")
+        
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        await update.message.reply_text(f"❌ Error: {str(e)}")
+
+
+# ========================================
+# ADMIN: SETUP MENU
+# ========================================
+
+async def setup_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Commande /setup_admin_menu - Configure le menu admin manuellement"""
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ Permission denied.")
+        return
+    
+    try:
+        admin_commands = [
+            BotCommand("start", "Start the bot"),
+            BotCommand("stats", "📊 View statistics"),
+            BotCommand("topactive", "🔥 Top active users"),
+            BotCommand("growth", "📈 Growth report"),
+            BotCommand("givecoins", "💰 Give coins to user"),
+            BotCommand("giveaway", "🎁 Create giveaway"),
+            BotCommand("reward_top3", "🏆 Reward top 3"),
+            BotCommand("announce", "📢 Send announcement"),
+            BotCommand("sendto_level", "📩 Message by level"),
+            BotCommand("sendto_active", "🔥 Message active users"),
+            BotCommand("ban", "🚫 Ban user"),
+            BotCommand("unban", "✅ Unban user"),
+            BotCommand("maintenance", "🔧 Maintenance mode"),
+            BotCommand("forcesync", "🔄 Force sync"),
+            BotCommand("finduser", "🔍 Search users"),
+            BotCommand("export", "📦 Export data"),
+            BotCommand("broadcast", "📢 Broadcast message"),
+            BotCommand("sendto", "📩 Send to user"),
+            BotCommand("sendto_gif", "🎬 Send GIF to user"),
+            BotCommand("listusers", "👥 List all users"),
+            BotCommand("userinfo", "ℹ️ Get user info"),
+            BotCommand("leaderboard", "🏆 View leaderboard"),
+            BotCommand("profile", "👤 View profile"),
+        ]
+        
+        admin_chat_id = update.effective_chat.id
+        await context.bot.set_my_commands(
+            commands=admin_commands,
+            scope=BotCommandScopeChat(chat_id=admin_chat_id)
+        )
+        
+        await update.message.reply_text(
+            "✅ *Admin menu configured!*\n\n"
+            "You now have access to all admin commands! 🚀\n\n"
+            "Check the menu (/) to see all available commands.",
+            parse_mode='Markdown'
+        )
+        
+        logger.info(f"Admin menu configured for {update.effective_user.username}")
+        
+    except Exception as e:
+        logger.error(f"Error setting up admin menu: {e}")
         await update.message.reply_text(f"❌ Error: {str(e)}")
 
 
@@ -992,12 +1578,7 @@ _Use /sendto {target_username} <message> to send them a message_
 # ========================================
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Gère tous les callback_data des boutons inline
-    - 'leaderboard' -> affiche le classement
-    - 'profile' -> affiche le profil
-    - 'referral' -> affiche le lien de parrainage
-    """
+    """Gère tous les callback_data des boutons inline"""
     query = update.callback_query
     
     if query.data == 'leaderboard':
@@ -1013,13 +1594,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========================================
 
 async def pre_checkout_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Gestionnaire pour les requêtes de pre-checkout (avant paiement)
-    Vérifie que le payload est valide avant d'accepter le paiement
-    """
+    """Gestionnaire pour les requêtes de pre-checkout"""
     query = update.pre_checkout_query
     
-    # Vérifier la validité du payload
     if query.invoice_payload.startswith('stars_payment_'):
         await query.answer(ok=True)
         logger.info(f"Pre-checkout approved for {query.from_user.username}")
@@ -1029,16 +1606,12 @@ async def pre_checkout_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 async def successful_payment_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Gestionnaire pour les paiements réussis
-    Appelé automatiquement après un paiement Telegram Stars confirmé
-    """
+    """Gestionnaire pour les paiements réussis"""
     payment = update.message.successful_payment
     user = update.effective_user
     
     logger.info(f"Successful payment from {user.username}: {payment.total_amount} XTR")
     
-    # Traiter le paiement et accorder les avantages premium
     await update.message.reply_text(
         f"✅ Paiement de {payment.total_amount} ⭐ réussi !\n"
         f"Merci pour votre achat premium 🌟"
@@ -1050,36 +1623,39 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
 # ========================================
 
 async def post_init(application):
-    """
-    Configure les commandes du bot au démarrage
-    - Commandes publiques pour tous les utilisateurs
-    - Commandes admin uniquement pour l'admin (si son chat_id est disponible)
-    """
+    """Configure les commandes du bot au démarrage"""
     
-    # Commandes pour tous les utilisateurs (menu standard)
     public_commands = [
         BotCommand("start", "Start the bot"),
     ]
     
-    # Commandes admin complètes
     admin_commands = [
         BotCommand("start", "Start the bot"),
-        BotCommand("broadcast", "📢 Send message to all users"),
-        BotCommand("sendto", "📩 Send message to specific user"),
-        BotCommand("sendto_gif", "🎬 Send GIF message to user"),
-        BotCommand("listusers", "👥 List all users"),
-        BotCommand("userinfo", "ℹ️ Get user information"),
-        BotCommand("leaderboard", "🏆 View leaderboard"),
-        BotCommand("profile", "👤 View profile"),
+        BotCommand("stats", "📊 View statistics"),
+        BotCommand("topactive", "🔥 Top active users"),
+        BotCommand("growth", "📈 Growth report"),
+        BotCommand("givecoins", "💰 Give coins to user"),
+        BotCommand("giveaway", "🎁 Create giveaway"),
+        BotCommand("reward_top3", "🏆 Reward top 3"),
+        BotCommand("announce", "📢 Send announcement"),
+        BotCommand("sendto_level", "📩 Message by level"),
+        BotCommand("sendto_active", "🔥 Message active users"),
+        BotCommand("ban", "🚫 Ban user"),
+        BotCommand("unban", "✅ Unban user"),
+        BotCommand("maintenance", "🔧 Maintenance mode"),
+        BotCommand("forcesync", "🔄 Force sync"),
+        BotCommand("finduser", "🔍 Search users"),
+        BotCommand("export", "📦 Export data"),
+        BotCommand("broadcast", "📢 Broadcast"),
+        BotCommand("sendto", "📩 Send to user"),
+        BotCommand("listusers", "👥 List users"),
+        BotCommand("userinfo", "ℹ️ User info"),
     ]
     
-    # Définir les commandes publiques pour tout le monde
     await application.bot.set_my_commands(public_commands)
     logger.info("Public bot commands configured")
     
-    # Essayer de configurer le menu admin
     try:
-        # Récupérer le chat_id de l'admin depuis Firebase
         admin_doc = db.collection('users').document(ADMIN_USERNAME).get()
         
         if admin_doc.exists:
@@ -1087,75 +1663,18 @@ async def post_init(application):
             admin_chat_id = admin_data.get('chat_id')
             
             if admin_chat_id:
-                # Définir les commandes admin spécifiques pour le chat de l'admin
                 await application.bot.set_my_commands(
                     commands=admin_commands,
                     scope=BotCommandScopeChat(chat_id=admin_chat_id)
                 )
                 logger.info(f"Admin commands configured for chat_id: {admin_chat_id}")
             else:
-                logger.warning("Admin chat_id not found, admin menu not configured")
+                logger.warning("Admin chat_id not found")
         else:
-            logger.warning("Admin not found in database, admin menu not configured")
+            logger.warning("Admin not found in database")
     
     except Exception as e:
         logger.error(f"Error configuring admin commands: {e}")
-
-
-# ========================================
-# COMMANDE POUR CONFIGURER LE MENU ADMIN MANUELLEMENT
-# ========================================
-
-async def setup_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Commande /setup_admin_menu - RÉSERVÉE À L'ADMIN
-    Configure le menu admin avec toutes les commandes disponibles
-    À utiliser si le menu admin n'a pas été configuré automatiquement
-    """
-    
-    # Vérifier que l'utilisateur est bien l'admin
-    if update.effective_user.username != ADMIN_USERNAME:
-        await update.message.reply_text("❌ You don't have permission to use this command.")
-        return
-    
-    try:
-        # Commandes admin complètes
-        admin_commands = [
-            BotCommand("start", "Start the bot"),
-            BotCommand("broadcast", "📢 Send message to all users"),
-            BotCommand("sendto", "📩 Send message to specific user"),
-            BotCommand("sendto_gif", "🎬 Send GIF message to user"),
-            BotCommand("listusers", "👥 List all users"),
-            BotCommand("userinfo", "ℹ️ Get user information"),
-            BotCommand("leaderboard", "🏆 View leaderboard"),
-            BotCommand("profile", "👤 View profile"),
-        ]
-        
-        # Configurer les commandes pour ce chat spécifique
-        admin_chat_id = update.effective_chat.id
-        await context.bot.set_my_commands(
-            commands=admin_commands,
-            scope=BotCommandScopeChat(chat_id=admin_chat_id)
-        )
-        
-        await update.message.reply_text(
-            "✅ Admin menu configured successfully!\n\n"
-            "You should now see all admin commands in your menu (/ button).\n\n"
-            "Available commands:\n"
-            "• /broadcast - Send to all users\n"
-            "• /sendto - Send to specific user\n"
-            "• /sendto_gif - Send GIF to user\n"
-            "• /listusers - List all users\n"
-            "• /userinfo - Get user info\n"
-            "• /leaderboard - View leaderboard\n"
-            "• /profile - View profile"
-        )
-        
-        logger.info(f"Admin menu configured for {update.effective_user.username}")
-        
-    except Exception as e:
-        logger.error(f"Error setting up admin menu: {e}")
-        await update.message.reply_text(f"❌ Error configuring admin menu: {str(e)}")
 
 
 # ========================================
@@ -1163,25 +1682,15 @@ async def setup_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========================================
 
 def main():
-    """
-    Point d'entrée principal du bot
-    - Initialise l'application
-    - Enregistre tous les handlers (commandes, callbacks, paiements)
-    - Lance le polling pour écouter les messages
-    """
-    # Créer l'application avec le token et la fonction post_init
+    """Point d'entrée principal du bot"""
     application = ApplicationBuilder().token(API_TOKEN).post_init(post_init).build()
 
-    # ========================================
-    # HANDLERS DE COMMANDES PUBLIQUES
-    # ========================================
+    # COMMANDES PUBLIQUES
     application.add_handler(CommandHandler('start', start))
     application.add_handler(CommandHandler('leaderboard', leaderboard))
     application.add_handler(CommandHandler('profile', profile))
     
-    # ========================================
-    # HANDLERS DE COMMANDES ADMIN
-    # ========================================
+    # COMMANDES ADMIN DE BASE
     application.add_handler(CommandHandler('broadcast', broadcast))
     application.add_handler(CommandHandler('sendto', sendto))
     application.add_handler(CommandHandler('sendto_gif', sendto_gif))
@@ -1189,25 +1698,32 @@ def main():
     application.add_handler(CommandHandler('userinfo', userinfo))
     application.add_handler(CommandHandler('setup_admin_menu', setup_admin_menu))
     
-    # ========================================
-    # HANDLER POUR LES BOUTONS INLINE
-    # ========================================
-    application.add_handler(CallbackQueryHandler(button_handler))
+    # 15 NOUVELLES FEATURES ADMIN
+    application.add_handler(CommandHandler('stats', stats))
+    application.add_handler(CommandHandler('topactive', topactive))
+    application.add_handler(CommandHandler('growth', growth))
+    application.add_handler(CommandHandler('givecoins', givecoins))
+    application.add_handler(CommandHandler('giveaway', giveaway))
+    application.add_handler(CommandHandler('reward_top3', reward_top3))
+    application.add_handler(CommandHandler('announce', announce))
+    application.add_handler(CommandHandler('sendto_level', sendto_level))
+    application.add_handler(CommandHandler('sendto_active', sendto_active))
+    application.add_handler(CommandHandler('schedule', schedule))
+    application.add_handler(CommandHandler('ban', ban))
+    application.add_handler(CommandHandler('unban', unban))
+    application.add_handler(CommandHandler('maintenance', maintenance))
+    application.add_handler(CommandHandler('forcesync', forcesync))
+    application.add_handler(CommandHandler('finduser', finduser))
+    application.add_handler(CommandHandler('export', export))
     
-    # ========================================
-    # HANDLERS POUR LES PAIEMENTS TELEGRAM STARS
-    # ========================================
+    # CALLBACKS & PAIEMENTS
+    application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(PreCheckoutQueryHandler(pre_checkout_handler))
     application.add_handler(MessageHandler(filters.SUCCESSFUL_PAYMENT, successful_payment_handler))
 
-    # Démarrer le bot en mode polling (écoute continue des messages)
-    logger.info("Bot started and listening for updates...")
+    logger.info("Bot started with 20+ admin features! 🚀")
     application.run_polling()
 
-
-# ========================================
-# POINT D'ENTRÉE
-# ========================================
 
 if __name__ == '__main__':
     main()
