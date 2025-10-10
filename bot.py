@@ -6,7 +6,7 @@ Fonctionnalités: Profile, Leaderboard, Referral system, Broadcast, Admin tools
 
 from datetime import datetime
 import logging
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update, BotCommand
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Bot, Update, BotCommand, BotCommandScopeChat
 from telegram.ext import ApplicationBuilder, CommandHandler, CallbackQueryHandler, ContextTypes
 from dotenv import load_dotenv
 import firebase_admin
@@ -1052,15 +1052,110 @@ async def successful_payment_handler(update: Update, context: ContextTypes.DEFAU
 async def post_init(application):
     """
     Configure les commandes du bot au démarrage
-    Ces commandes apparaissent dans le menu Telegram (bouton "/" en bas à gauche)
-    Seule la commande /start est visible pour tous les utilisateurs
+    - Commandes publiques pour tous les utilisateurs
+    - Commandes admin uniquement pour l'admin (si son chat_id est disponible)
     """
-    commands = [
+    
+    # Commandes pour tous les utilisateurs (menu standard)
+    public_commands = [
         BotCommand("start", "Start the bot"),
     ]
     
-    await application.bot.set_my_commands(commands)
-    logger.info("Bot commands configured successfully")
+    # Commandes admin complètes
+    admin_commands = [
+        BotCommand("start", "Start the bot"),
+        BotCommand("broadcast", "📢 Send message to all users"),
+        BotCommand("sendto", "📩 Send message to specific user"),
+        BotCommand("sendto_gif", "🎬 Send GIF message to user"),
+        BotCommand("listusers", "👥 List all users"),
+        BotCommand("userinfo", "ℹ️ Get user information"),
+        BotCommand("leaderboard", "🏆 View leaderboard"),
+        BotCommand("profile", "👤 View profile"),
+    ]
+    
+    # Définir les commandes publiques pour tout le monde
+    await application.bot.set_my_commands(public_commands)
+    logger.info("Public bot commands configured")
+    
+    # Essayer de configurer le menu admin
+    try:
+        # Récupérer le chat_id de l'admin depuis Firebase
+        admin_doc = db.collection('users').document(ADMIN_USERNAME).get()
+        
+        if admin_doc.exists:
+            admin_data = admin_doc.to_dict()
+            admin_chat_id = admin_data.get('chat_id')
+            
+            if admin_chat_id:
+                # Définir les commandes admin spécifiques pour le chat de l'admin
+                await application.bot.set_my_commands(
+                    commands=admin_commands,
+                    scope=BotCommandScopeChat(chat_id=admin_chat_id)
+                )
+                logger.info(f"Admin commands configured for chat_id: {admin_chat_id}")
+            else:
+                logger.warning("Admin chat_id not found, admin menu not configured")
+        else:
+            logger.warning("Admin not found in database, admin menu not configured")
+    
+    except Exception as e:
+        logger.error(f"Error configuring admin commands: {e}")
+
+
+# ========================================
+# COMMANDE POUR CONFIGURER LE MENU ADMIN MANUELLEMENT
+# ========================================
+
+async def setup_admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Commande /setup_admin_menu - RÉSERVÉE À L'ADMIN
+    Configure le menu admin avec toutes les commandes disponibles
+    À utiliser si le menu admin n'a pas été configuré automatiquement
+    """
+    
+    # Vérifier que l'utilisateur est bien l'admin
+    if update.effective_user.username != ADMIN_USERNAME:
+        await update.message.reply_text("❌ You don't have permission to use this command.")
+        return
+    
+    try:
+        # Commandes admin complètes
+        admin_commands = [
+            BotCommand("start", "Start the bot"),
+            BotCommand("broadcast", "📢 Send message to all users"),
+            BotCommand("sendto", "📩 Send message to specific user"),
+            BotCommand("sendto_gif", "🎬 Send GIF message to user"),
+            BotCommand("listusers", "👥 List all users"),
+            BotCommand("userinfo", "ℹ️ Get user information"),
+            BotCommand("leaderboard", "🏆 View leaderboard"),
+            BotCommand("profile", "👤 View profile"),
+        ]
+        
+        # Configurer les commandes pour ce chat spécifique
+        admin_chat_id = update.effective_chat.id
+        await context.bot.set_my_commands(
+            commands=admin_commands,
+            scope=BotCommandScopeChat(chat_id=admin_chat_id)
+        )
+        
+        await update.message.reply_text(
+            "✅ Admin menu configured successfully!\n\n"
+            "You should now see all admin commands in your menu (/ button).\n\n"
+            "Available commands:\n"
+            "• /broadcast - Send to all users\n"
+            "• /sendto - Send to specific user\n"
+            "• /sendto_gif - Send GIF to user\n"
+            "• /listusers - List all users\n"
+            "• /userinfo - Get user info\n"
+            "• /leaderboard - View leaderboard\n"
+            "• /profile - View profile"
+        )
+        
+        logger.info(f"Admin menu configured for {update.effective_user.username}")
+        
+    except Exception as e:
+        logger.error(f"Error setting up admin menu: {e}")
+        await update.message.reply_text(f"❌ Error configuring admin menu: {str(e)}")
 
 
 # ========================================
@@ -1092,6 +1187,7 @@ def main():
     application.add_handler(CommandHandler('sendto_gif', sendto_gif))
     application.add_handler(CommandHandler('listusers', listusers))
     application.add_handler(CommandHandler('userinfo', userinfo))
+     application.add_handler(CommandHandler('setup_admin_menu', setup_admin_menu)
     
     # ========================================
     # HANDLER POUR LES BOUTONS INLINE
