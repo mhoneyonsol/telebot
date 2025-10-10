@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import firebase_admin
 from firebase_admin import credentials, firestore
 import os
+import html
 import json
 from telegram.ext import PreCheckoutQueryHandler, MessageHandler, filters
 
@@ -216,82 +217,80 @@ Keep sharing to unlock more rewards! 🚀
 async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
     username = update.effective_user.username or update.effective_user.first_name
     user_rank = None
-    leaderboard_text = "🏆 *Leaderboard* 🏆\n\n"
+    leaderboard_text = ""
     
-    header = "✨ *Top Players* ✨\n\n"
+    header = "✨ <b>Top Players</b> ✨\n\n"
 
     try:
-        # Fetch leaderboard data from Firestore, ordering by document ID
+        # Fetch leaderboard data from Firestore
         leaderboard_ref = db.collection('mainleaderboard')
         leaderboard_docs = leaderboard_ref.stream()
 
-        # Sort documents based on their document ID (numeric rank)
-        sorted_docs = sorted(leaderboard_docs, key=lambda d: int(d.id))  # Sort by document name as rank
+        # Sort documents based on their document ID
+        sorted_docs = sorted(leaderboard_docs, key=lambda d: int(d.id))
 
         # Build the leaderboard message
         for doc in sorted_docs:
-            rank = int(doc.id)  # Document name is the rank
+            rank = int(doc.id)
             data = doc.to_dict()
             user = data.get("username")
             balance = data.get("token_balance", 0)
             level = data.get("level", 1)
 
-            # Format the balance using the helper function
             formatted_balance = format_number(balance)
+            
+            # Escape HTML entities
+            escaped_user = html.escape(user)
 
             # Highlight the user if they're viewing their rank
             if user == username:
                 user_rank = rank
-                leaderboard_text += f"🌟 **{rank} - {user}** | 💰 {formatted_balance} NES | Lvl {level}\n"
+                leaderboard_text += f"🌟 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | Lvl {level}\n"
             elif rank == 1:
-                # Highlight the top rank
-                leaderboard_text += f"🥇 **{rank} - {user}** | 💰 {formatted_balance} NES | 🏅 Lvl {level}\n"
+                leaderboard_text += f"🥇 <b>{rank} - {escaped_user}</b> | 💰 {formatted_balance} NES | 🏅 Lvl {level}\n"
             else:
-                leaderboard_text += f"{rank} - {user} | 💰 {formatted_balance} NES | Lvl {level}\n"
+                leaderboard_text += f"{rank} - {escaped_user} | 💰 {formatted_balance} NES | Lvl {level}\n"
 
         # Add user's rank at the top
         if user_rank:
-            rank_text = f"Your rank is: **#{user_rank}** 🎉\n\n"
+            rank_text = f"Your rank is: <b>#{user_rank}</b> 🎉\n\n"
         else:
             rank_text = "Your rank is: Not Available 😢\n\n"
 
-        # Add a footer or call-to-action
-        footer = "\n🎮 *Keep playing to climb the leaderboard!*"
+        # Footer
+        footer = "\n🎮 <b>Keep playing to climb the leaderboard!</b>"
 
-        # Add a button to launch the app
+        # Keyboard
         keyboard = InlineKeyboardMarkup([
             [InlineKeyboardButton("🏆 View Profile", callback_data='profile')],
             [InlineKeyboardButton("🚀 Launch App", url="https://t.me/nestortonbot/home")]
         ])
 
         if update.callback_query:
-            # If triggered via callback query
             await update.callback_query.answer()
-
-            # Send the animation and leaderboard text in the same new message
             await context.bot.send_animation(
                 chat_id=update.effective_chat.id,
                 animation="https://i.imgur.com/gdyscr0.gif",
                 caption=header + rank_text + leaderboard_text + footer,
                 reply_markup=keyboard,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
         else:
-            # If triggered via the /leaderboard command
             await context.bot.send_animation(
                 chat_id=update.effective_chat.id,
                 animation="https://i.imgur.com/gdyscr0.gif",
                 caption=header + rank_text + leaderboard_text + footer,
                 reply_markup=keyboard,
-                parse_mode="Markdown"
+                parse_mode="HTML"
             )
 
     except Exception as e:
         logger.error(f"Error fetching leaderboard: {e}")
         error_message = "An error occurred while fetching the leaderboard. Please try again later."
+        
         if update.callback_query:
-            await update.callback_query.edit_message_text(error_message)
             await update.callback_query.answer()
+            await update.callback_query.message.reply_text(error_message)
         else:
             await update.message.reply_text(error_message)
 
