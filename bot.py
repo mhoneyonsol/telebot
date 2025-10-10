@@ -143,8 +143,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             user_data["pending_referral_code"] = referral_code
 
         if user_doc.exists:
+            # User existant - juste update
             await loop.run_in_executor(executor, user_doc_ref.update, user_data)
         else:
+            user_data["created_at"] = firestore.SERVER_TIMESTAMP
             await loop.run_in_executor(executor, user_doc_ref.set, user_data)
 
         if referral_code:
@@ -854,39 +856,108 @@ async def topactive(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # 3️⃣ GROWTH - Graphique de croissance
+# 3️⃣ GROWTH - Graphique de croissance (version réelle)
 async def growth(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Commande /growth - Rapport de croissance"""
+    """Commande /growth - Rapport de croissance basé sur les vraies données"""
     if update.effective_user.username != ADMIN_USERNAME:
         await update.message.reply_text("❌ Permission denied.")
         return
     
     try:
-        # Simulation de données de croissance (à adapter selon tes données réelles)
-        weeks = [234, 345, 289, 412]
-        total = sum(weeks)
-        avg = total / len(weeks)
+        users_ref = db.collection('users')
+        all_users = list(users_ref.stream())
         
+        total_users = len(all_users)
+        
+        # Si moins de 10 users, afficher un message simple
+        if total_users < 10:
+            message = f"""
+📈 *Growth Report*
+
+👥 Total Users: {total_users}
+
+_Not enough data yet for weekly growth analysis._
+_Keep growing! 🚀_
+"""
+            await update.message.reply_text(message, parse_mode='Markdown')
+            return
+        
+        # Calculer la croissance par semaine (basé sur les 4 dernières semaines)
+        now = datetime.utcnow()
+        weeks_data = []
+        
+        for week_offset in range(4, 0, -1):  # Semaines 4, 3, 2, 1
+            week_start = now - timedelta(weeks=week_offset)
+            week_end = now - timedelta(weeks=week_offset-1)
+            
+            count = 0
+            for user_doc in all_users:
+                user_data = user_doc.to_dict()
+                
+                # Essayer de trouver une date de création
+                created_at = None
+                
+                # Option 1: Champ last_session_time comme proxy
+                if 'last_session_time' in user_data:
+                    try:
+                        last_session = user_data.get('last_session_time')
+                        if isinstance(last_session, int):
+                            created_at = datetime.utcfromtimestamp(last_session / 1000)
+                    except:
+                        pass
+                
+                # Compter si dans cette semaine
+                if created_at and week_start <= created_at < week_end:
+                    count += 1
+            
+            weeks_data.append(count)
+        
+        # Si pas de données de dates, afficher simplement le total
+        if sum(weeks_data) == 0:
+            # Distribution égale simulée
+            avg_per_week = total_users / 4
+            weeks_data = [int(avg_per_week)] * 4
+            note = "\n⚠️ _Growth data estimated (no creation dates available)_"
+        else:
+            note = ""
+        
+        # Construire le message
         message = "📈 *Growth Report (Last 30 Days)*\n\n"
         
-        for i, count in enumerate(weeks, 1):
-            bar_length = int((count / max(weeks)) * 15)
+        max_week = max(weeks_data) if max(weeks_data) > 0 else 1
+        
+        for i, count in enumerate(weeks_data, 1):
+            bar_length = int((count / max_week) * 15) if max_week > 0 else 0
             bar = "█" * bar_length + "░" * (15 - bar_length)
             
             change = ""
-            if i > 1:
-                percent = ((count - weeks[i-2]) / weeks[i-2]) * 100
+            if i > 1 and weeks_data[i-2] > 0:
+                percent = ((count - weeks_data[i-2]) / weeks_data[i-2]) * 100
                 change = f" ({percent:+.0f}%)"
             
             message += f"Week {i}: {bar} {count} new users{change}\n"
         
+        avg = sum(weeks_data) / len(weeks_data)
+        total = sum(weeks_data)
+        
+        # Déterminer la tendance
+        if weeks_data[-1] > weeks_data[0]:
+            trend = "↗️ Growing"
+        elif weeks_data[-1] < weeks_data[0]:
+            trend = "↘️ Declining"
+        else:
+            trend = "➡️ Stable"
+        
         message += f"\n🎯 Average: {int(avg)} users/week\n"
-        message += f"📊 Trend: ↗️ Growing"
+        message += f"📊 Total (4 weeks): {total} users\n"
+        message += f"📈 Trend: {trend}"
+        message += note
         
         await update.message.reply_text(message, parse_mode='Markdown')
         logger.info("Admin viewed growth report")
         
     except Exception as e:
-        logger.error(f"Error: {e}")
+        logger.error(f"Error in growth: {e}")
         await update.message.reply_text(f"❌ Error: {str(e)}")
 
 
@@ -990,6 +1061,7 @@ _Admin: Use /reward_top3 to reward the top players, or manually send rewards wit
 
 
 # 6️⃣ REWARD_TOP3 - Récompenser le top 3
+# 6️⃣ REWARD_TOP3 - Récompenser automatiquement le top 3
 async def reward_top3(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Commande /reward_top3 - Récompenser le top 3 du leaderboard"""
     if update.effective_user.username != ADMIN_USERNAME:
@@ -998,7 +1070,11 @@ async def reward_top3(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         leaderboard_ref = db.collection('mainleaderboard')
-        top_docs = list(leaderboard_ref.stream())[:3]
+        leaderboard_docs = leaderboard_ref.stream()
+        
+        # ✅ TRIER PAR L'ID DU DOCUMENT (qui est le rang)
+        sorted_docs = sorted(leaderboard_docs, key=lambda d: int(d.id))
+        top_docs = sorted_docs[:3]
         
         rewards = [10000, 5000, 2500]
         
