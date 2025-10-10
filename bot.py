@@ -1060,7 +1060,7 @@ _Admin: Use /reward_top3 to reward the top players, or manually send rewards wit
         await update.message.reply_text(f"❌ Error: {str(e)}")
 
 
-# 6️⃣ REWARD_TOP3 - Récompenser le top 3
+
 # 6️⃣ REWARD_TOP3 - Récompenser automatiquement le top 3
 async def reward_top3(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Commande /reward_top3 - Récompenser le top 3 du leaderboard"""
@@ -1072,13 +1072,15 @@ async def reward_top3(update: Update, context: ContextTypes.DEFAULT_TYPE):
         leaderboard_ref = db.collection('mainleaderboard')
         leaderboard_docs = leaderboard_ref.stream()
         
-        # ✅ TRIER PAR L'ID DU DOCUMENT (qui est le rang)
+        # Trier par l'ID du document (qui est le rang)
         sorted_docs = sorted(leaderboard_docs, key=lambda d: int(d.id))
         top_docs = sorted_docs[:3]
         
         rewards = [10000, 5000, 2500]
         
         message = "🏆 *Rewarding Top 3 Players...*\n\n"
+        
+        bot = Bot(token=API_TOKEN)
         
         for i, doc in enumerate(top_docs):
             data = doc.to_dict()
@@ -1096,9 +1098,17 @@ async def reward_top3(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if user_doc.exists:
                 chat_id = user_doc.to_dict().get('chat_id')
                 if chat_id:
-                    bot = Bot(token=API_TOKEN)
-                    user_message = f"🏆 Congratulations! You ranked #{i+1} and received {format_number(reward)} NES! 🎉"
-                    await bot.send_message(chat_id=chat_id, text=user_message)
+                    try:
+                        # ✅ Message sans parse_mode pour éviter les erreurs de parsing
+                        user_message = f"🏆 Congratulations! You ranked #{i+1} and received {format_number(reward)} NES! 🎉"
+                        await bot.send_message(
+                            chat_id=chat_id, 
+                            text=user_message
+                            # ✅ PAS de parse_mode
+                        )
+                        logger.info(f"Reward notification sent to {username}")
+                    except Exception as e:
+                        logger.error(f"Failed to notify {username}: {e}")
             
             message += f"{i+1}. {username} - Sent {format_number(reward)} NES ✅\n"
         
