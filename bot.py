@@ -198,8 +198,6 @@ Ready to join the battle for NES? Start farming, trading, and earning on TON tod
         # Clavier inline avec tous les boutons d'actions
         keyboard = [
             [InlineKeyboardButton("💎 Launch dApp", url='https://t.me/nestortonbot/hello')],
-            [InlineKeyboardButton("👾 Stardust", url='https://t.me/nestortonbot/Stardust')],
-            [InlineKeyboardButton("👾 Runner", url='https://t.me/nestortonbot/Runner')],
             [InlineKeyboardButton("👤 Profile", callback_data='profile')],
             [InlineKeyboardButton("📢 Get My Referral Link", callback_data='referral')],
             [InlineKeyboardButton("🗯️ Channel", url='https://t.me/pxlonton')],
