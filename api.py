@@ -7,6 +7,8 @@ from firebase_admin import credentials, firestore
 import json
 from dotenv import load_dotenv
 import logging
+import random
+from decimal import Decimal
 from bot import send_referral_notification
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -119,6 +121,303 @@ async def proxy_verify_membership():
     except Exception as e:
         logger.error(f"Error in proxy verification: {e}")
         return jsonify({'error': str(e)}), 500
+
+
+# Configuration des collectibles
+NFT_COLLECTIBLES_CONFIG = {
+    "1": {
+        "bet": 1.0,
+        "gifts": [
+            {"id": "gift1_1", "name": "Green Crystal", "rarity": "common", "chance": 20},
+            {"id": "gift1_2", "name": "Blue Gem", "rarity": "common", "chance": 18},
+            {"id": "gift1_3", "name": "Purple Stone", "rarity": "uncommon", "chance": 15},
+            {"id": "gift1_4", "name": "Golden Nugget", "rarity": "uncommon", "chance": 12},
+            {"id": "gift1_5", "name": "Ruby Fragment", "rarity": "rare", "chance": 8},
+            {"id": "gift1_6", "name": "Diamond Piece", "rarity": "rare", "chance": 5},
+            {"id": "gift1_7", "name": "Legendary Ore", "rarity": "epic", "chance": 3},
+            {"id": "gift1_8", "name": "Mythic Crystal", "rarity": "legendary", "chance": 1}
+        ],
+        "ton_prizes": [
+            {"amount": 0.2, "chance": 10},
+            {"amount": 0.5, "chance": 5}
+        ],
+        "loss_chance": 3
+    },
+    "3": {
+        "bet": 3.0,
+        "gifts": [
+            {"id": "gift3_1", "name": "Silver Crystal", "rarity": "common", "chance": 18},
+            {"id": "gift3_2", "name": "Aqua Gem", "rarity": "common", "chance": 16},
+            {"id": "gift3_3", "name": "Emerald Stone", "rarity": "uncommon", "chance": 14},
+            {"id": "gift3_4", "name": "Gold Nugget", "rarity": "uncommon", "chance": 12},
+            {"id": "gift3_5", "name": "Ruby Crystal", "rarity": "rare", "chance": 10},
+            {"id": "gift3_6", "name": "Big Diamond", "rarity": "rare", "chance": 7},
+            {"id": "gift3_7", "name": "Mythic Ore", "rarity": "epic", "chance": 4},
+            {"id": "gift3_8", "name": "Ancient Relic", "rarity": "legendary", "chance": 2}
+        ],
+        "ton_prizes": [
+            {"amount": 0.5, "chance": 8},
+            {"amount": 2.5, "chance": 4}
+        ],
+        "loss_chance": 5
+    },
+    "6": {
+        "bet": 6.0,
+        "gifts": [
+            {"id": "gift6_1", "name": "Platinum Crystal", "rarity": "common", "chance": 16},
+            {"id": "gift6_2", "name": "Sapphire Gem", "rarity": "common", "chance": 14},
+            {"id": "gift6_3", "name": "Jade Stone", "rarity": "uncommon", "chance": 12},
+            {"id": "gift6_4", "name": "Pure Gold", "rarity": "uncommon", "chance": 10},
+            {"id": "gift6_5", "name": "Ruby Cluster", "rarity": "rare", "chance": 8},
+            {"id": "gift6_6", "name": "Mega Diamond", "rarity": "rare", "chance": 6},
+            {"id": "gift6_7", "name": "Divine Artifact", "rarity": "epic", "chance": 3},
+            {"id": "gift6_8", "name": "Celestial Gem", "rarity": "legendary", "chance": 1}
+        ],
+        "ton_prizes": [
+            {"amount": 0.8, "chance": 12},
+            {"amount": 5.5, "chance": 3}
+        ],
+        "loss_chance": 15
+    },
+    "10": {
+        "bet": 10.0,
+        "gifts": [
+            {"id": "gift10_1", "name": "Titanium Crystal", "rarity": "common", "chance": 14},
+            {"id": "gift10_2", "name": "Cosmic Gem", "rarity": "common", "chance": 12},
+            {"id": "gift10_3", "name": "Obsidian Stone", "rarity": "uncommon", "chance": 10},
+            {"id": "gift10_4", "name": "Royal Gold", "rarity": "uncommon", "chance": 8},
+            {"id": "gift10_5", "name": "Ruby Crown", "rarity": "rare", "chance": 6},
+            {"id": "gift10_6", "name": "Ultimate Diamond", "rarity": "rare", "chance": 4},
+            {"id": "gift10_7", "name": "Supreme Artifact", "rarity": "epic", "chance": 2},
+            {"id": "gift10_8", "name": "Omega Crystal", "rarity": "legendary", "chance": 0.5}
+        ],
+        "ton_prizes": [
+            {"amount": 1.0, "chance": 22},
+            {"amount": 9.8, "chance": 5}
+        ],
+        "loss_chance": 16.5
+    }
+}
+
+
+def nft_calculate_prize(bet_level: str):
+    """Calcule le gain aléatoire"""
+    config = NFT_COLLECTIBLES_CONFIG[bet_level]
+    
+    outcomes = []
+    
+    # NFTs
+    for gift in config["gifts"]:
+        outcomes.extend([("collectible", gift)] * int(gift["chance"] * 10))
+    
+    # TON
+    for prize in config["ton_prizes"]:
+        outcomes.extend([("ton", prize)] * int(prize["chance"] * 10))
+    
+    # Pertes
+    outcomes.extend([("loss", None)] * int(config["loss_chance"] * 10))
+    
+    result_type, result_item = random.choice(outcomes)
+    
+    if result_type == "collectible":
+        return {
+            "type": "collectible",
+            "collectible": result_item,
+            "rarity": result_item["rarity"]
+        }
+    elif result_type == "ton":
+        return {
+            "type": "ton",
+            "amount": result_item["amount"]
+        }
+    else:
+        return {"type": "loss"}
+
+
+@app.route('/api/chance/deposit', methods=['POST', 'OPTIONS'])
+async def nft_deposit():
+    """Déposer des TON dans le wallet interne"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        data = await request.get_json()
+        
+        username = data.get('username')
+        wallet_address = data.get('wallet')
+        amount = float(data.get('amount'))
+        tx_hash = data.get('txHash')
+        
+        if not all([username, wallet_address, amount, tx_hash]):
+            return jsonify({'error': 'Missing fields'}), 400
+        
+        logger.info(f"💰 Deposit: {username} - {amount} TON")
+        
+        user_wallet_ref = db.collection('game_wallets').document(username)
+        user_wallet = user_wallet_ref.get()
+        
+        if user_wallet.exists:
+            current_balance = user_wallet.to_dict().get('balance', 0)
+            new_balance = current_balance + amount
+            user_wallet_ref.update({
+                'balance': new_balance,
+                'last_deposit': firestore.SERVER_TIMESTAMP,
+                'total_deposited': firestore.FieldValue.increment(amount)
+            })
+        else:
+            new_balance = amount
+            user_wallet_ref.set({
+                'username': username,
+                'wallet_address': wallet_address,
+                'balance': amount,
+                'collectibles': [],
+                'total_deposited': amount,
+                'total_withdrawn': 0,
+                'created_at': firestore.SERVER_TIMESTAMP
+            })
+        
+        db.collection('deposits').add({
+            'username': username,
+            'wallet': wallet_address,
+            'amount': amount,
+            'tx_hash': tx_hash,
+            'timestamp': firestore.SERVER_TIMESTAMP
+        })
+        
+        logger.info(f"✅ Deposit successful: {username}")
+        
+        return jsonify({
+            'success': True,
+            'new_balance': new_balance
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Deposit error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/chance/balance/<username>', methods=['GET'])
+async def nft_get_balance(username):
+    """Récupérer le solde"""
+    try:
+        user_wallet_ref = db.collection('game_wallets').document(username)
+        user_wallet = user_wallet_ref.get()
+        
+        if not user_wallet.exists:
+            return jsonify({
+                'balance': 0,
+                'collectibles': []
+            }), 200
+        
+        data = user_wallet.to_dict()
+        
+        return jsonify({
+            'balance': data.get('balance', 0),
+            'collectibles': data.get('collectibles', [])
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Balance error: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/chance/play', methods=['POST', 'OPTIONS'])
+async def nft_play_game():
+    """Jouer au jeu"""
+    if request.method == 'OPTIONS':
+        return '', 204
+    
+    try:
+        data = await request.get_json()
+        
+        username = data.get('username')
+        bet_level = str(data.get('betLevel'))
+        
+        if not username or bet_level not in NFT_COLLECTIBLES_CONFIG:
+            return jsonify({'error': 'Invalid request'}), 400
+        
+        bet_amount = NFT_COLLECTIBLES_CONFIG[bet_level]["bet"]
+        
+        logger.info(f"🎰 {username} playing {bet_level} TON")
+        
+        user_wallet_ref = db.collection('game_wallets').document(username)
+        user_wallet = user_wallet_ref.get()
+        
+        if not user_wallet.exists:
+            return jsonify({'error': 'No wallet found'}), 400
+        
+        wallet_data = user_wallet.to_dict()
+        current_balance = wallet_data.get('balance', 0)
+        
+        if current_balance < bet_amount:
+            return jsonify({'error': 'Insufficient balance'}), 400
+        
+        # Calculer le gain
+        prize = nft_calculate_prize(bet_level)
+        
+        new_balance = current_balance - bet_amount
+        
+        if prize["type"] == "collectible":
+            collectibles = wallet_data.get('collectibles', [])
+            collectibles.append({
+                'id': prize["collectible"]["id"],
+                'name': prize["collectible"]["name"],
+                'rarity': prize["rarity"],
+                'won_at': firestore.SERVER_TIMESTAMP,
+                'bet_level': bet_level
+            })
+            
+            user_wallet_ref.update({
+                'balance': new_balance,
+                'collectibles': collectibles
+            })
+            
+            result = {
+                'success': True,
+                'type': 'collectible',
+                'collectible': prize["collectible"],
+                'rarity': prize["rarity"]
+            }
+            
+        elif prize["type"] == "ton":
+            new_balance += prize["amount"]
+            
+            user_wallet_ref.update({
+                'balance': new_balance
+            })
+            
+            result = {
+                'success': True,
+                'type': 'ton',
+                'amount': prize["amount"]
+            }
+            
+        else:
+            user_wallet_ref.update({
+                'balance': new_balance
+            })
+            
+            result = {
+                'success': True,
+                'type': 'loss'
+            }
+        
+        # Sauvegarder historique
+        db.collection('game_history').add({
+            'username': username,
+            'bet_level': bet_level,
+            'bet_amount': bet_amount,
+            'result': result,
+            'timestamp': firestore.SERVER_TIMESTAMP
+        })
+        
+        logger.info(f"✅ Game result: {result['type']}")
+        
+        return jsonify(result), 200
+        
+    except Exception as e:
+        logger.error(f"Game error: {e}")
+        return jsonify({'error': str(e)}), 500        
 
 @app.route('/api/telegram/verify', methods=['POST'])
 @require_api_key
